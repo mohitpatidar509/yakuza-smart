@@ -8,11 +8,16 @@ interface ScooterRepository {
     val scooterState: StateFlow<ScooterState>
     val scannedDevices: StateFlow<List<BleDeviceItem>>
     val isScanning: StateFlow<Boolean>
+    val isBluetoothEnabled: StateFlow<Boolean>
+    val scanError: StateFlow<String?>
+    val savedScooter: StateFlow<BleDeviceItem?>
 
-    suspend fun startScan()
+    suspend fun startScan(): Boolean
     fun stopScan()
 
     suspend fun connect(device: BleDeviceItem)
+    suspend fun connectSavedScooter()
+    suspend fun forgetSavedScooter()
     suspend fun disconnect()
 
     fun setSimulatorEnabled(enabled: Boolean)

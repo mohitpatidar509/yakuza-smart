@@ -20,6 +20,9 @@ fun YakuzaNavGraph(
     val scooterState by viewModel.scooterState.collectAsState()
     val scannedDevices by viewModel.scannedDevices.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
+    val isBluetoothEnabled by viewModel.isBluetoothEnabled.collectAsState()
+    val scanError by viewModel.scanError.collectAsState()
+    val savedScooter by viewModel.savedScooter.collectAsState()
     val settingRecords by viewModel.settingRecords.collectAsState()
     val persistenceRecords by viewModel.persistenceRecords.collectAsState()
     val lastResult by viewModel.lastTransactionResult.collectAsState()
@@ -66,6 +69,8 @@ fun YakuzaNavGraph(
             DeviceScanScreen(
                 scannedDevices = scannedDevices,
                 isScanning = isScanning,
+                isBluetoothEnabled = isBluetoothEnabled,
+                scanError = scanError,
                 language = language,
                 onLanguageToggle = { viewModel.toggleLanguage() },
                 onStartScan = { viewModel.startScan() },
@@ -98,8 +103,12 @@ fun YakuzaNavGraph(
         composable(Screen.Dashboard.route) {
             DashboardScreen(
                 state = scooterState,
+                savedScooter = savedScooter,
+                isBluetoothEnabled = isBluetoothEnabled,
                 language = language,
                 onLanguageToggle = { viewModel.toggleLanguage() },
+                onConnectSavedScooter = { viewModel.connectSavedScooter() },
+                onForgetSavedScooter = { viewModel.forgetSavedScooter() },
                 onNavigateToScan = { navController.navigate(Screen.DeviceScan.route) },
                 onDisconnect = { viewModel.disconnect() },
                 onNavigateToSettings = { navController.navigate(Screen.AllSettings.route) },

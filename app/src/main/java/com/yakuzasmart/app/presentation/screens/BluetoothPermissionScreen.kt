@@ -1,5 +1,7 @@
 package com.yakuzasmart.app.presentation.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -12,10 +14,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yakuzasmart.app.core.localization.Language
+import com.yakuzasmart.app.core.security.BluetoothPermissionHelper
 import com.yakuzasmart.app.core.theme.*
 import com.yakuzasmart.app.presentation.components.YakuzaButton
 import com.yakuzasmart.app.presentation.components.YakuzaTopBar
@@ -27,6 +31,14 @@ fun BluetoothPermissionScreen(
     onGrantPermissions: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        onGrantPermissions()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,7 +139,13 @@ fun BluetoothPermissionScreen(
 
             YakuzaButton(
                 text = if (language == Language.HINDI) "अनुमति दें और आगे बढ़ें" else "Grant & Continue",
-                onClick = onGrantPermissions
+                onClick = {
+                    if (BluetoothPermissionHelper.hasRequiredPermissions(context)) {
+                        onGrantPermissions()
+                    } else {
+                        permissionLauncher.launch(BluetoothPermissionHelper.getRequiredPermissions())
+                    }
+                }
             )
         }
     }

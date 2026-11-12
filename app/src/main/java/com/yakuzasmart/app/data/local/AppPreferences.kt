@@ -60,6 +60,13 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun forgetLastDevice() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_LAST_DEVICE_ADDRESS)
+            prefs.remove(KEY_LAST_DEVICE_NAME)
+        }
+    }
+
     suspend fun clearPreferences() {
         context.dataStore.edit { it.clear() }
     }

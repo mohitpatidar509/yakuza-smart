@@ -98,3 +98,17 @@ enum class SettingCategory(
     SAFETY_SYSTEMS("PCS / TCS / ABS", "PCS / TCS / ABS", 0x90.toByte(), true),
     INDUCTION_VOLTAGE("Induction / Voltage", "इंडक्शन / वोल्टेज", 0x85.toByte())
 }
+
+enum class YakuzaModel(
+    val modelName: String,
+    val modelNameHi: String,
+    val voltageNominal: String,
+    val motorWattage: String,
+    val topSpeedKmh: Int
+) {
+    YAKUZA_RUBIE("Yakuza Rubie", "याकुज़ा रूबी", "60V / 72V", "1200W BLDC Hub", 55),
+    YAKUZA_KARISMA("Yakuza Karisma", "याकुज़ा करिश्मा", "60V Lithium", "1000W BLDC Hub", 50),
+    YAKUZA_DELTA("Yakuza Delta", "याकुज़ा डेल्टा", "60V / 72V Heavy", "1500W High Torque", 50),
+    YAKUZA_RAZOR("Yakuza Razor", "याकुज़ा रेज़र", "72V Sport", "2000W High Speed", 65),
+    YAKUZA_UNIVERSAL("Yakuza Smart EV", "याकुज़ा स्मार्ट ईवी", "48V / 60V / 72V", "Standard BLDC Controller", 45)
+}

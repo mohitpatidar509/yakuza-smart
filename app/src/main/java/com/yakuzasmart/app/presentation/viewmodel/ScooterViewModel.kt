@@ -19,6 +19,10 @@ class ScooterViewModel(
     val scooterState: StateFlow<ScooterState> = scooterRepository.scooterState
     val scannedDevices: StateFlow<List<BleDeviceItem>> = scooterRepository.scannedDevices
     val isScanning: StateFlow<Boolean> = scooterRepository.isScanning
+    val isBluetoothEnabled: StateFlow<Boolean> = scooterRepository.isBluetoothEnabled
+    val scanError: StateFlow<String?> = scooterRepository.scanError
+    val savedScooter: StateFlow<BleDeviceItem?> = scooterRepository.savedScooter
+
     val settingRecords: StateFlow<Map<SettingCategory, SettingRecord>> = settingsRepository.settingRecords
     val persistenceRecords: StateFlow<List<PersistenceTestRecord>> = settingsRepository.persistenceRecords
 
@@ -59,10 +63,12 @@ class ScooterViewModel(
         }
     }
 
-    fun startScan() {
+    fun startScan(): Boolean {
+        var success = false
         viewModelScope.launch {
-            scooterRepository.startScan()
+            success = scooterRepository.startScan()
         }
+        return success
     }
 
     fun stopScan() {
@@ -72,6 +78,18 @@ class ScooterViewModel(
     fun connectDevice(device: BleDeviceItem) {
         viewModelScope.launch {
             scooterRepository.connect(device)
+        }
+    }
+
+    fun connectSavedScooter() {
+        viewModelScope.launch {
+            scooterRepository.connectSavedScooter()
+        }
+    }
+
+    fun forgetSavedScooter() {
+        viewModelScope.launch {
+            scooterRepository.forgetSavedScooter()
         }
     }
 

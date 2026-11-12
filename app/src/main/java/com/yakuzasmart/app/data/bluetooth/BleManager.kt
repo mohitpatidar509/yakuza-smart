@@ -5,10 +5,14 @@ import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import com.yakuzasmart.app.core.constants.BleConstants
 import com.yakuzasmart.app.core.logging.DiagnosticLogger
+import com.yakuzasmart.app.core.security.BluetoothPermissionHelper
 import com.yakuzasmart.app.domain.model.BleDeviceItem
 import com.yakuzasmart.app.domain.model.ConnectionStatus
 import kotlinx.coroutines.*
@@ -27,11 +31,15 @@ class BleManager(
 ) {
     private val bluetoothManager: BluetoothManager? =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-    private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+    private val bluetoothAdapter: BluetoothAdapter?
+        get() = bluetoothManager?.adapter
 
     private var activeGatt: BluetoothGatt? = null
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
     private var notifyCharacteristic: BluetoothGattCharacteristic? = null
+
+    private val _isBluetoothEnabled = MutableStateFlow(bluetoothAdapter?.isEnabled == true)
+    val isBluetoothEnabled: StateFlow<Boolean> = _isBluetoothEnabled.asStateFlow()
 
     private val _connectionStatus = MutableStateFlow(ConnectionStatus.DISCONNECTED)
     val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus.asStateFlow()
@@ -42,47 +50,86 @@ class BleManager(
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError: StateFlow<String?> = _scanError.asStateFlow()
+
     private val _inboundPackets = MutableSharedFlow<ByteArray>(replay = 0)
     val inboundPackets: SharedFlow<ByteArray> = _inboundPackets.asSharedFlow()
 
     private val writeQueue = ConcurrentLinkedQueue<ByteArray>()
     private var isWriting = false
 
+    // BroadcastReceiver to monitor real-time Bluetooth ON/OFF toggles
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                val enabled = (state == BluetoothAdapter.STATE_ON)
+                _isBluetoothEnabled.value = enabled
+                DiagnosticLogger.i("BleManager", "Bluetooth hardware state changed: enabled=$enabled")
+                if (!enabled) {
+                    stopScan()
+                    disconnect()
+                }
+            }
+        }
+    }
+
+    init {
+        try {
+            val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+            context.registerReceiver(bluetoothReceiver, filter)
+        } catch (e: Exception) {
+            DiagnosticLogger.w("BleManager", "Failed to register Bluetooth state receiver: ${e.message}")
+        }
+    }
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             result?.device?.let { device ->
-                val name = device.name ?: result.scanRecord?.deviceName
-                val address = device.address
-                val rssi = result.rssi
-                val isYakuza = (name?.contains("YAKUZA", ignoreCase = true) == true) ||
-                        (name?.contains("YKZ", ignoreCase = true) == true) ||
-                        (name?.contains("SCOOTER", ignoreCase = true) == true)
+                try {
+                    val name = device.name ?: result.scanRecord?.deviceName
+                    val address = device.address ?: return
+                    val rssi = result.rssi
+                    val isYakuza = (name?.contains("YAKUZA", ignoreCase = true) == true) ||
+                            (name?.contains("YKZ", ignoreCase = true) == true) ||
+                            (name?.contains("SCOOTER", ignoreCase = true) == true)
 
-                val item = BleDeviceItem(
-                    name = name,
-                    address = address,
-                    rssi = rssi,
-                    isBonded = device.bondState == BluetoothDevice.BOND_BONDED,
-                    isYakuzaDevice = isYakuza
-                )
+                    val item = BleDeviceItem(
+                        name = name,
+                        address = address,
+                        rssi = rssi,
+                        isBonded = device.bondState == BluetoothDevice.BOND_BONDED,
+                        isYakuzaDevice = isYakuza
+                    )
 
-                val current = _scannedDevices.value.toMutableList()
-                val existingIndex = current.indexOfFirst { it.address == address }
-                if (existingIndex >= 0) {
-                    current[existingIndex] = item
-                } else {
-                    current.add(item)
+                    val current = _scannedDevices.value.toMutableList()
+                    val existingIndex = current.indexOfFirst { it.address == address }
+                    if (existingIndex >= 0) {
+                        current[existingIndex] = item
+                    } else {
+                        current.add(item)
+                    }
+                    _scannedDevices.value = current.sortedWith(
+                        compareByDescending<BleDeviceItem> { it.isYakuzaDevice }
+                            .thenByDescending { it.rssi }
+                    )
+                } catch (e: Exception) {
+                    DiagnosticLogger.w("BleManager", "Error processing scan result: ${e.message}")
                 }
-                // Sort with Yakuza devices and strongest RSSI first
-                _scannedDevices.value = current.sortedWith(
-                    compareByDescending<BleDeviceItem> { it.isYakuzaDevice }
-                        .thenByDescending { it.rssi }
-                )
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
-            DiagnosticLogger.e("BleManager", "BLE Scan failed with errorCode: $errorCode")
+            val errorMsg = when (errorCode) {
+                SCAN_FAILED_ALREADY_STARTED -> "Scan already started"
+                SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> "App registration failed"
+                SCAN_FAILED_FEATURE_UNSUPPORTED -> "BLE Scan unsupported on device"
+                SCAN_FAILED_INTERNAL_ERROR -> "Bluetooth driver internal error"
+                else -> "Scan error code $errorCode"
+            }
+            DiagnosticLogger.e("BleManager", "BLE Scan failed: $errorMsg")
+            _scanError.value = errorMsg
             _isScanning.value = false
         }
     }
@@ -100,9 +147,13 @@ class BleManager(
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     _connectionStatus.value = ConnectionStatus.DISCOVERING_SERVICES
-                    DiagnosticLogger.i("BleManager", "Connected to GATT server. Requesting MTU and discovering services...")
-                    gatt?.requestMtu(BleConstants.TARGET_MTU)
-                    gatt?.discoverServices()
+                    DiagnosticLogger.i("BleManager", "Connected to GATT server. Discovering services...")
+                    try {
+                        gatt?.requestMtu(BleConstants.TARGET_MTU)
+                        gatt?.discoverServices()
+                    } catch (e: Exception) {
+                        DiagnosticLogger.e("BleManager", "Error requesting MTU / discovering services: ${e.message}")
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     DiagnosticLogger.i("BleManager", "Disconnected from GATT server.")
@@ -122,24 +173,28 @@ class BleManager(
                 return
             }
 
-            DiagnosticLogger.i("BleManager", "Services discovered. Searching for 0xFFF0 service...")
-            val service = gatt.getService(BleConstants.SERVICE_UUID)
-            if (service == null) {
-                DiagnosticLogger.e("BleManager", "FFF0 Service NOT found on device!")
-                return
+            try {
+                DiagnosticLogger.i("BleManager", "Services discovered. Searching for 0xFFF0 service...")
+                val service = gatt.getService(BleConstants.SERVICE_UUID)
+                if (service == null) {
+                    DiagnosticLogger.w("BleManager", "FFF0 Service NOT found. Checking generic vendor services...")
+                    _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
+                    return
+                }
+
+                writeCharacteristic = service.getCharacteristic(BleConstants.WRITE_CHAR_UUID)
+                notifyCharacteristic = service.getCharacteristic(BleConstants.NOTIFY_CHAR_UUID)
+
+                if (notifyCharacteristic != null) {
+                    enableNotifications(gatt, notifyCharacteristic!!)
+                }
+
+                _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
+                DiagnosticLogger.i("BleManager", "BLE Setup Complete. Communication channel open.")
+            } catch (e: Exception) {
+                DiagnosticLogger.e("BleManager", "Error in onServicesDiscovered: ${e.message}")
+                _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
             }
-
-            writeCharacteristic = service.getCharacteristic(BleConstants.WRITE_CHAR_UUID)
-            notifyCharacteristic = service.getCharacteristic(BleConstants.NOTIFY_CHAR_UUID)
-
-            if (notifyCharacteristic != null) {
-                enableNotifications(gatt, notifyCharacteristic!!)
-            } else {
-                DiagnosticLogger.w("BleManager", "Notify characteristic FFF1 not found.")
-            }
-
-            _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
-            DiagnosticLogger.i("BleManager", "BLE Setup Complete. Channel open.")
         }
 
         override fun onCharacteristicChanged(
@@ -182,28 +237,80 @@ class BleManager(
         }
     }
 
-    fun startScan() {
-        val scanner = bluetoothAdapter?.bluetoothLeScanner
-        if (scanner == null) {
-            DiagnosticLogger.e("BleManager", "Bluetooth adapter or LE scanner unavailable.")
-            return
+    /**
+     * Safely initiates BLE discovery with comprehensive permission and Bluetooth state checks.
+     * Guaranteed never to throw an unhandled exception or crash the app.
+     */
+    fun startScan(): Boolean {
+        _scanError.value = null
+
+        // 1. Check if Bluetooth hardware is available
+        val adapter = bluetoothAdapter
+        if (adapter == null) {
+            _scanError.value = "Bluetooth is not supported on this device"
+            DiagnosticLogger.e("BleManager", _scanError.value!!)
+            return false
         }
 
-        _scannedDevices.value = emptyList()
-        _isScanning.value = true
+        // 2. Check if Bluetooth is enabled
+        if (!adapter.isEnabled) {
+            _isBluetoothEnabled.value = false
+            _scanError.value = "Bluetooth is turned OFF. Please turn on Bluetooth in settings."
+            DiagnosticLogger.w("BleManager", _scanError.value!!)
+            return false
+        }
+        _isBluetoothEnabled.value = true
 
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+        // 3. Check Android runtime permissions
+        if (!BluetoothPermissionHelper.hasRequiredPermissions(context)) {
+            _scanError.value = "Bluetooth permissions are required to scan for scooters."
+            DiagnosticLogger.w("BleManager", _scanError.value!!)
+            return false
+        }
 
-        DiagnosticLogger.i("BleManager", "Starting BLE scan (15s timeout)...")
-        scanner.startScan(null, settings, scanCallback)
+        // 4. Check location service on legacy Android (Android 11 and lower)
+        if (!BluetoothPermissionHelper.isLocationEnabledForBle(context)) {
+            _scanError.value = "Please turn on GPS/Location services for Bluetooth scanning on this Android version."
+            DiagnosticLogger.w("BleManager", _scanError.value!!)
+            return false
+        }
 
-        scope.launch {
-            delay(BleConstants.SCAN_TIMEOUT_MS)
-            if (_isScanning.value) {
-                stopScan()
+        // 5. Safely start scan inside try-catch to prevent OS SecurityException crashes
+        try {
+            val scanner = adapter.bluetoothLeScanner
+            if (scanner == null) {
+                _scanError.value = "Bluetooth LE scanner is currently unavailable."
+                DiagnosticLogger.e("BleManager", _scanError.value!!)
+                return false
             }
+
+            _scannedDevices.value = emptyList()
+            _isScanning.value = true
+
+            val settings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
+
+            DiagnosticLogger.i("BleManager", "Starting safe BLE scan (15s timeout)...")
+            scanner.startScan(null, settings, scanCallback)
+
+            scope.launch {
+                delay(BleConstants.SCAN_TIMEOUT_MS)
+                if (_isScanning.value) {
+                    stopScan()
+                }
+            }
+            return true
+        } catch (e: SecurityException) {
+            _scanError.value = "Bluetooth permission error: ${e.message}"
+            _isScanning.value = false
+            DiagnosticLogger.e("BleManager", "SecurityException during scan: ${e.message}")
+            return false
+        } catch (e: Exception) {
+            _scanError.value = "Unable to start scan: ${e.message}"
+            _isScanning.value = false
+            DiagnosticLogger.e("BleManager", "Exception during scan: ${e.message}")
+            return false
         }
     }
 
@@ -220,47 +327,78 @@ class BleManager(
     }
 
     fun connect(deviceItem: BleDeviceItem) {
-        val device = bluetoothAdapter?.getRemoteDevice(deviceItem.address)
-        if (device == null) {
-            DiagnosticLogger.e("BleManager", "Invalid Bluetooth address: ${deviceItem.address}")
+        connectByAddress(deviceItem.address, deviceItem.displayName)
+    }
+
+    fun connectByAddress(address: String, displayName: String?) {
+        val adapter = bluetoothAdapter
+        if (adapter == null || !adapter.isEnabled) {
+            _isBluetoothEnabled.value = false
+            DiagnosticLogger.e("BleManager", "Cannot connect: Bluetooth is OFF.")
             return
         }
 
-        stopScan()
-        releaseGatt()
+        if (!BluetoothPermissionHelper.hasRequiredPermissions(context)) {
+            DiagnosticLogger.e("BleManager", "Cannot connect: Missing permissions.")
+            return
+        }
 
-        _connectionStatus.value = ConnectionStatus.CONNECTING
-        DiagnosticLogger.i("BleManager", "Connecting to ${deviceItem.displayName} [${deviceItem.address}]...")
+        try {
+            val device = adapter.getRemoteDevice(address)
+            if (device == null) {
+                DiagnosticLogger.e("BleManager", "Invalid Bluetooth address: $address")
+                return
+            }
 
-        activeGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-        } else {
-            device.connectGatt(context, false, gattCallback)
+            stopScan()
+            releaseGatt()
+
+            _connectionStatus.value = ConnectionStatus.CONNECTING
+            DiagnosticLogger.i("BleManager", "Connecting to ${displayName ?: "Scooter"} [$address]...")
+
+            activeGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            } else {
+                device.connectGatt(context, false, gattCallback)
+            }
+        } catch (e: SecurityException) {
+            DiagnosticLogger.e("BleManager", "SecurityException during connect: ${e.message}")
+            _connectionStatus.value = ConnectionStatus.DISCONNECTED
+        } catch (e: Exception) {
+            DiagnosticLogger.e("BleManager", "Exception during connect: ${e.message}")
+            _connectionStatus.value = ConnectionStatus.DISCONNECTED
         }
     }
 
     fun disconnect() {
-        DiagnosticLogger.i("BleManager", "User requested disconnect.")
-        activeGatt?.disconnect()
-        releaseGatt()
-        _connectionStatus.value = ConnectionStatus.DISCONNECTED
+        try {
+            DiagnosticLogger.i("BleManager", "User requested disconnect.")
+            activeGatt?.disconnect()
+        } catch (e: Exception) {
+            DiagnosticLogger.w("BleManager", "Error during disconnect: ${e.message}")
+        } finally {
+            releaseGatt()
+            _connectionStatus.value = ConnectionStatus.DISCONNECTED
+        }
     }
 
     private fun enableNotifications(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        gatt.setCharacteristicNotification(characteristic, true)
-        val descriptor = characteristic.getDescriptor(BleConstants.CCCD_UUID)
-        if (descriptor != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-            } else {
-                @Suppress("DEPRECATION")
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                @Suppress("DEPRECATION")
-                gatt.writeDescriptor(descriptor)
+        try {
+            gatt.setCharacteristicNotification(characteristic, true)
+            val descriptor = characteristic.getDescriptor(BleConstants.CCCD_UUID)
+            if (descriptor != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    @Suppress("DEPRECATION")
+                    gatt.writeDescriptor(descriptor)
+                }
+                DiagnosticLogger.i("BleManager", "Subscribed to CCCD 0x2902 notifications on FFF1.")
             }
-            DiagnosticLogger.i("BleManager", "Subscribed to CCCD 0x2902 notifications on FFF1.")
-        } else {
-            DiagnosticLogger.w("BleManager", "CCCD descriptor 0x2902 not found on FFF1.")
+        } catch (e: Exception) {
+            DiagnosticLogger.w("BleManager", "Failed to subscribe notifications: ${e.message}")
         }
     }
 
@@ -282,15 +420,20 @@ class BleManager(
 
         DiagnosticLogger.tx("BleManager", "Dispatching packet to FFF2", packet)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeCharacteristic(char, packet, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-        } else {
-            @Suppress("DEPRECATION")
-            char.value = packet
-            @Suppress("DEPRECATION")
-            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            @Suppress("DEPRECATION")
-            gatt.writeCharacteristic(char)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeCharacteristic(char, packet, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            } else {
+                @Suppress("DEPRECATION")
+                char.value = packet
+                @Suppress("DEPRECATION")
+                char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                gatt.writeCharacteristic(char)
+            }
+        } catch (e: Exception) {
+            DiagnosticLogger.e("BleManager", "Exception during writeCharacteristic: ${e.message}")
+            isWriting = false
         }
     }
 

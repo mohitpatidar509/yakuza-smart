@@ -24,6 +24,11 @@ class ScooterRepositoryImpl(
 
     override val scannedDevices: StateFlow<List<BleDeviceItem>> = bleManager.scannedDevices
     override val isScanning: StateFlow<Boolean> = bleManager.isScanning
+    override val isBluetoothEnabled: StateFlow<Boolean> = bleManager.isBluetoothEnabled
+    override val scanError: StateFlow<String?> = bleManager.scanError
+
+    private val _savedScooter = MutableStateFlow<BleDeviceItem?>(null)
+    override val savedScooter: StateFlow<BleDeviceItem?> = _savedScooter.asStateFlow()
 
     private var isSimulatedMode = false
 
@@ -53,6 +58,23 @@ class ScooterRepositoryImpl(
                 }
             }
         }
+
+        // Observe saved scooter from DataStore preferences
+        scope.launch {
+            appPreferences.lastDeviceFlow.collect { (address, name) ->
+                if (!address.isNullOrBlank()) {
+                    _savedScooter.value = BleDeviceItem(
+                        name = name ?: "Yakuza Scooter",
+                        address = address,
+                        rssi = -60,
+                        isBonded = true,
+                        isYakuzaDevice = true
+                    )
+                } else {
+                    _savedScooter.value = null
+                }
+            }
+        }
     }
 
     private fun handleInboundBytes(bytes: ByteArray) {
@@ -72,20 +94,11 @@ class ScooterRepositoryImpl(
         }
     }
 
-    override suspend fun startScan() {
+    override suspend fun startScan(): Boolean {
         if (isSimulatedMode) {
-            // Emulate finding a simulator device
-            val mockDevice = BleDeviceItem(
-                name = "YAKUZA_SMART_MOCK",
-                address = "00:11:22:33:44:55",
-                rssi = -55,
-                isBonded = false,
-                isYakuzaDevice = true
-            )
-            // Add to simulated scan results if needed
-            return
+            return true
         }
-        bleManager.startScan()
+        return bleManager.startScan()
     }
 
     override fun stopScan() {
@@ -107,7 +120,20 @@ class ScooterRepositoryImpl(
         }
 
         bleManager.connect(device)
-        appPreferences.saveLastDevice(device.address, device.name)
+        appPreferences.saveLastDevice(device.address, device.displayName)
+    }
+
+    override suspend fun connectSavedScooter() {
+        val saved = _savedScooter.value ?: return
+        DiagnosticLogger.i("ScooterRepo", "Connecting to saved scooter: ${saved.displayName} [${saved.address}]")
+        connect(saved)
+    }
+
+    override suspend fun forgetSavedScooter() {
+        disconnect()
+        appPreferences.forgetLastDevice()
+        _savedScooter.value = null
+        DiagnosticLogger.i("ScooterRepo", "Saved scooter forgotten.")
     }
 
     override suspend fun disconnect() {

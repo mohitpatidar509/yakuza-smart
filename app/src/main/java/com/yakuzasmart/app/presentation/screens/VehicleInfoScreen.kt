@@ -2,6 +2,7 @@ package com.yakuzasmart.app.presentation.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import com.yakuzasmart.app.core.localization.Language
 import com.yakuzasmart.app.core.theme.*
 import com.yakuzasmart.app.domain.model.ProximityDistance
 import com.yakuzasmart.app.domain.model.ScooterState
+import com.yakuzasmart.app.domain.model.YakuzaModel
 import com.yakuzasmart.app.presentation.components.YakuzaTopBar
 
 @Composable
@@ -27,6 +29,7 @@ fun VehicleInfoScreen(
     onNavigateBack: () -> Unit
 ) {
     var proximityMode by remember { mutableStateOf(ProximityDistance.MIDDLE) }
+    var selectedModel by remember { mutableStateOf(YakuzaModel.YAKUZA_RUBIE) }
 
     Column(
         modifier = Modifier
@@ -45,32 +48,89 @@ fun VehicleInfoScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
                 Text(
-                    text = if (language == Language.HINDI) "वाहन एवं हार्डवेयर विवरण" else "HARDWARE & CONTROLLER SPECS",
+                    text = if (language == Language.HINDI) "याकुज़ा इलेक्ट्रिक मॉडल चयन" else "YAKUZA SCOOTER MODEL PROFILE",
                     color = YakuzaOrangePrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (language == Language.HINDI)
+                        "अपनी याकुज़ा स्कूटी का मॉडल चुनें ताकि सटीक स्पेसिफिकेशन व वोल्टेज दिखे:"
+                    else
+                        "Select your Yakuza scooter model to optimize powertrain and voltage display:",
+                    fontSize = 12.sp,
+                    color = YakuzaTextSecondary
+                )
             }
 
-            // Voltage Card
+            // Model Selection Pills
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    YakuzaModel.entries.forEach { model ->
+                        val isSelected = selectedModel == model
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (isSelected) YakuzaOrangeContainer else YakuzaDarkCharcoal,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected) YakuzaOrangePrimary else YakuzaCardBorder,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable { selectedModel = model }
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = if (language == Language.HINDI) model.modelNameHi else model.modelName,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = if (isSelected) YakuzaOrangePrimary else YakuzaTextPrimary
+                                    )
+                                    Text(
+                                        text = "${model.voltageNominal}  •  ${model.motorWattage}  •  Max ${model.topSpeedKmh} km/h",
+                                        fontSize = 11.sp,
+                                        color = YakuzaTextMuted
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedModel = model },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = YakuzaOrangePrimary,
+                                        unselectedColor = YakuzaTextMuted
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Battery Architecture Card
             item {
                 InfoCard(
-                    title = if (language == Language.HINDI) "वोल्टेज सिस्टम (Voltage System)" else "Battery System Voltage",
+                    title = if (language == Language.HINDI) "बैटरी व वोल्टेज आर्किटेक्चर" else "Battery Voltage Architecture",
                     value = if (state.isConnected && state.batteryVoltageVolts != null) {
-                        "%.1f V (Nominal 60V Architecture)".format(state.batteryVoltageVolts)
+                        "%.1f V (Live Controller Stream)".format(state.batteryVoltageVolts)
                     } else {
-                        "60V Standard Architecture (Disconnected)"
+                        "${selectedModel.voltageNominal} Architecture (Default)"
                     },
-                    subtitle = if (language == Language.HINDI)
-                        "48V / 60V / 72V ऑटो-डिटेक्ट कंट्रोलर"
-                    else
-                        "48V / 60V / 72V Auto-detect BMS link"
+                    subtitle = "BMS Auto-detect compatible with 48V, 60V, and 72V packs"
                 )
             }
 
@@ -93,7 +153,7 @@ fun VehicleInfoScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (language == Language.HINDI)
-                                "पास आने पर फोन से स्वतः अनलॉक होने की संवेदनशीलता"
+                                "फोन पास आने पर स्वतः अनलॉक होने की संवेदनशीलता"
                             else
                                 "BLE beacon unlock range when approaching scooter",
                             fontSize = 11.sp,
@@ -128,14 +188,6 @@ fun VehicleInfoScreen(
                     title = "BLE Service UUID",
                     value = "0000FFF0-0000-1000-8000-00805F9B34FB",
                     subtitle = "Notify: 0x0000FFF1 • Write: 0x0000FFF2"
-                )
-            }
-
-            item {
-                InfoCard(
-                    title = "Controller Protocol",
-                    value = "Yakuza Frame v1.0 (Sync 0x88 0x01)",
-                    subtitle = "Framed Modulo-256 Checksum"
                 )
             }
 
