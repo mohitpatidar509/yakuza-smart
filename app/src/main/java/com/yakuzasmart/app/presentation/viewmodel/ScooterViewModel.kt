@@ -103,6 +103,42 @@ class ScooterViewModel(
         scooterRepository.setSimulatorEnabled(enabled)
     }
 
+    // --- Scooter Remote Control Actions ---
+
+    fun toggleIgnition() {
+        val currentState = scooterState.value
+        val nextPowerState = !currentState.isIgnitionOn
+        viewModelScope.launch {
+            scooterRepository.setIgnition(nextPowerState)
+        }
+    }
+
+    fun toggleVehicleLock() {
+        val currentState = scooterState.value
+        val nextLockState = !currentState.isLocked
+        viewModelScope.launch {
+            scooterRepository.setVehicleLock(nextLockState)
+        }
+    }
+
+    fun findVehicle() {
+        viewModelScope.launch {
+            scooterRepository.findVehicle()
+        }
+    }
+
+    fun openSeatCushion() {
+        viewModelScope.launch {
+            scooterRepository.openSeatCushion()
+        }
+    }
+
+    fun setVehicleModel(model: YakuzaModel) {
+        scooterRepository.setVehicleModel(model)
+    }
+
+    // --- Parameter Transactions ---
+
     fun updateSetting(category: SettingCategory, option: SettingOption) {
         viewModelScope.launch {
             _isExecutingTransaction.value = true

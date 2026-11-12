@@ -2,6 +2,7 @@ package com.yakuzasmart.app.domain.repository
 
 import com.yakuzasmart.app.domain.model.BleDeviceItem
 import com.yakuzasmart.app.domain.model.ScooterState
+import com.yakuzasmart.app.domain.model.YakuzaModel
 import kotlinx.coroutines.flow.StateFlow
 
 interface ScooterRepository {
@@ -24,4 +25,9 @@ interface ScooterRepository {
     fun isSimulatorEnabled(): Boolean
 
     suspend fun sendQueryAllStatus()
+    suspend fun setIgnition(powerOn: Boolean): Boolean
+    suspend fun setVehicleLock(lock: Boolean): Boolean
+    suspend fun findVehicle(): Boolean
+    suspend fun openSeatCushion(): Boolean
+    fun setVehicleModel(model: YakuzaModel)
 }

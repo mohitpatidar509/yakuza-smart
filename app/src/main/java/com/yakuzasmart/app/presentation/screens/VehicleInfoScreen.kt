@@ -26,10 +26,11 @@ fun VehicleInfoScreen(
     state: ScooterState,
     language: Language,
     onLanguageToggle: () -> Unit,
+    onSelectModel: (YakuzaModel) -> Unit = {},
     onNavigateBack: () -> Unit
 ) {
     var proximityMode by remember { mutableStateOf(ProximityDistance.MIDDLE) }
-    var selectedModel by remember { mutableStateOf(YakuzaModel.YAKUZA_RUBIE) }
+    var selectedModel by remember(state.selectedModel) { mutableStateOf(state.selectedModel) }
 
     Column(
         modifier = Modifier
@@ -86,7 +87,10 @@ fun VehicleInfoScreen(
                                     if (isSelected) YakuzaOrangePrimary else YakuzaCardBorder,
                                     RoundedCornerShape(12.dp)
                                 )
-                                .clickable { selectedModel = model }
+                                .clickable { 
+                                    selectedModel = model 
+                                    onSelectModel(model)
+                                }
                                 .padding(12.dp)
                         ) {
                             Row(
@@ -109,7 +113,10 @@ fun VehicleInfoScreen(
                                 }
                                 RadioButton(
                                     selected = isSelected,
-                                    onClick = { selectedModel = model },
+                                    onClick = { 
+                                        selectedModel = model 
+                                        onSelectModel(model)
+                                    },
                                     colors = RadioButtonDefaults.colors(
                                         selectedColor = YakuzaOrangePrimary,
                                         unselectedColor = YakuzaTextMuted

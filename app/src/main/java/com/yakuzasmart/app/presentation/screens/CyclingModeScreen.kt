@@ -143,7 +143,7 @@ fun CyclingModeScreen(
             }
 
             YakuzaButton(
-                text = if (language == Language.HINDI) "लागू करें" else "Apply & Verify (Opcode 0x45)",
+                text = if (language == Language.HINDI) "कंट्रोलर में लागू करें" else "Apply & Verify (Opcode 0x33)",
                 onClick = { onApplySetting(selectedMode) },
                 isLoading = isExecuting
             )

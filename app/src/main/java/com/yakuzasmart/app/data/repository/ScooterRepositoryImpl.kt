@@ -53,7 +53,9 @@ class ScooterRepositoryImpl(
                 if (!isSimulatedMode) {
                     _scooterState.value = _scooterState.value.copy(connectionStatus = status)
                     if (status == ConnectionStatus.CONNECTED_IDLE) {
-                        sendQueryAllStatus()
+                        DiagnosticLogger.i("ScooterRepo", "GATT connected & ready. Sending initial handshake...")
+                        delay(200)
+                        sendHandshake()
                     }
                 }
             }
@@ -84,6 +86,12 @@ class ScooterRepositoryImpl(
             }
             is ParsedInboundResult.CommandAck -> {
                 DiagnosticLogger.i("ScooterRepo", "Received ACK for ${result.category} -> ${result.confirmedOption.labelEn}")
+            }
+            is ParsedInboundResult.VehicleControlAck -> {
+                DiagnosticLogger.i("ScooterRepo", "Vehicle Control ACK for opcode 0x%02X".format(result.opcode))
+            }
+            is ParsedInboundResult.HandshakeAck -> {
+                DiagnosticLogger.i("ScooterRepo", "Handshake established with controller: MAC=${result.macAddress}")
             }
             is ParsedInboundResult.GenericAck -> {
                 DiagnosticLogger.i("ScooterRepo", "Received generic ACK opcode 0x%02X".format(result.opcode))
@@ -146,6 +154,14 @@ class ScooterRepositoryImpl(
             DiagnosticLogger.i("ScooterRepo", "Disconnected from Virtual Simulator.")
             return
         }
+        try {
+            // Send disconnect opcode 0x12 to controller
+            val disconnectPkt = BleProtocolHandler.buildPacket(BleConstants.OPCODE_DISCONNECT, byteArrayOf(0x00))
+            sendRawPacket(disconnectPkt)
+            delay(100)
+        } catch (e: Exception) {
+            // Ignore
+        }
         bleManager.disconnect()
         _scooterState.value = ScooterState(connectionStatus = ConnectionStatus.DISCONNECTED)
     }
@@ -159,12 +175,62 @@ class ScooterRepositoryImpl(
     override fun isSimulatorEnabled(): Boolean = isSimulatedMode
 
     override suspend fun sendQueryAllStatus() {
-        val queryPacket = BleProtocolHandler.buildPacket(BleConstants.OPCODE_QUERY_STATUS)
-        if (isSimulatedMode) {
-            bleSimulator.handleOutboundWrite(queryPacket)
-        } else {
-            bleManager.writePacket(queryPacket)
+        sendHandshake()
+    }
+
+    private suspend fun sendHandshake() {
+        val handshakePacket = BleProtocolHandler.buildHandshakePacket()
+        sendRawPacket(handshakePacket)
+    }
+
+    override suspend fun setIgnition(powerOn: Boolean): Boolean {
+        // Safety interlock: cannot turn off vehicle if moving faster than 0.5 km/h
+        val currentSpeed = _scooterState.value.speedKmh ?: 0.0f
+        if (!powerOn && currentSpeed > 0.5f) {
+            DiagnosticLogger.w("ScooterRepo", "Blocked turning OFF ignition while vehicle is in motion ($currentSpeed km/h)!")
+            return false
         }
+
+        DiagnosticLogger.i("ScooterRepo", "Dispatching Ignition Command: powerOn=$powerOn")
+        val packet = BleProtocolHandler.buildIgnitionPacket(powerOn)
+        sendRawPacket(packet)
+
+        // Optimistically update state, verified by subsequent 0x1F telemetry
+        _scooterState.value = _scooterState.value.copy(isIgnitionOn = powerOn)
+        return true
+    }
+
+    override suspend fun setVehicleLock(lock: Boolean): Boolean {
+        val currentSpeed = _scooterState.value.speedKmh ?: 0.0f
+        if (lock && currentSpeed > 0.5f) {
+            DiagnosticLogger.w("ScooterRepo", "Blocked arming Anti-Theft Lock while in motion ($currentSpeed km/h)!")
+            return false
+        }
+
+        DiagnosticLogger.i("ScooterRepo", "Dispatching Anti-Theft Lock Command: lock=$lock")
+        val packet = BleProtocolHandler.buildLockPacket(lock)
+        sendRawPacket(packet)
+
+        _scooterState.value = _scooterState.value.copy(isLocked = lock)
+        return true
+    }
+
+    override suspend fun findVehicle(): Boolean {
+        DiagnosticLogger.i("ScooterRepo", "Dispatching Find Vehicle / Siren Command")
+        val packet = BleProtocolHandler.buildFindVehiclePacket()
+        sendRawPacket(packet)
+        return true
+    }
+
+    override suspend fun openSeatCushion(): Boolean {
+        DiagnosticLogger.i("ScooterRepo", "Dispatching Open Seat Cushion Command")
+        val packet = BleProtocolHandler.buildSeatCushionPacket()
+        sendRawPacket(packet)
+        return true
+    }
+
+    override fun setVehicleModel(model: YakuzaModel) {
+        _scooterState.value = _scooterState.value.copy(selectedModel = model)
     }
 
     suspend fun sendRawPacket(packet: ByteArray) {

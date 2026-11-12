@@ -111,6 +111,10 @@ fun YakuzaNavGraph(
                 onForgetSavedScooter = { viewModel.forgetSavedScooter() },
                 onNavigateToScan = { navController.navigate(Screen.DeviceScan.route) },
                 onDisconnect = { viewModel.disconnect() },
+                onToggleIgnition = { viewModel.toggleIgnition() },
+                onToggleLock = { viewModel.toggleVehicleLock() },
+                onFindVehicle = { viewModel.findVehicle() },
+                onOpenSeat = { viewModel.openSeatCushion() },
                 onNavigateToSettings = { navController.navigate(Screen.AllSettings.route) },
                 onNavigateToNfc = { navController.navigate(Screen.NfcManagement.route) },
                 onNavigateToDiagnostics = { navController.navigate(Screen.Diagnostics.route) },
@@ -228,6 +232,7 @@ fun YakuzaNavGraph(
                 state = scooterState,
                 language = language,
                 onLanguageToggle = { viewModel.toggleLanguage() },
+                onSelectModel = { viewModel.setVehicleModel(it) },
                 onNavigateBack = { navController.popBackStack() }
             )
         }

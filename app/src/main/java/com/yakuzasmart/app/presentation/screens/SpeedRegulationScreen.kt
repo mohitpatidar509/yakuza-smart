@@ -161,7 +161,7 @@ fun SpeedRegulationScreen(
             }
 
             YakuzaButton(
-                text = if (language == Language.HINDI) "लागू करें" else "Apply & Verify (Opcode 0x3A)",
+                text = if (language == Language.HINDI) "कंट्रोलर में लागू करें" else "Apply & Verify (Opcode 0x3C)",
                 onClick = { onApplySetting(selectedGear) },
                 enabled = currentSpeedKmh <= 0.5f,
                 isLoading = isExecuting

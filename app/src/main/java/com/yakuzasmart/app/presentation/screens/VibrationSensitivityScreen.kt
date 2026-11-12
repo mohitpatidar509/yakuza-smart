@@ -141,7 +141,7 @@ fun VibrationSensitivityScreen(
             }
 
             YakuzaButton(
-                text = if (language == Language.HINDI) "लागू करें" else "Apply & Verify (Opcode 0x42)",
+                text = if (language == Language.HINDI) "कंट्रोलर में लागू करें" else "Apply & Verify (Opcode 0x3B)",
                 onClick = { onApplySetting(selectedSensitivity) },
                 isLoading = isExecuting
             )

@@ -13,8 +13,8 @@ enum class StartupMode(
     override val labelHi: String,
     override val payloadByte: Byte
 ) : SettingOption {
-    SOFT_START("Soft Start", "सॉफ्ट स्टार्ट", 0x00.toByte()),
-    HARD_BOOT("Hard Boot", "हार्ड बूट", 0x01.toByte())
+    SOFT_START("Soft Start (Smooth Throttle)", "सॉफ्ट स्टार्ट (आरामदायक गति)", 0x00.toByte()),
+    HARD_BOOT("Hard Boot (Instant Torque)", "हार्ड बूट (तुरंत पिकअप)", 0x01.toByte())
 }
 
 enum class SpeedRegulationOption(
@@ -22,10 +22,10 @@ enum class SpeedRegulationOption(
     override val labelHi: String,
     override val payloadByte: Byte
 ) : SettingOption {
-    SPEED_0("0 (Default/Neutral)", "0 (डिफ़ॉल्ट)", 0x00.toByte()),
-    SPEED_15("15 (15 km/h)", "15 (15 किमी/घंटा)", 0x01.toByte()),
-    SPEED_25("25 (25 km/h)", "25 (25 किमी/घंटा)", 0x02.toByte()),
-    SPEED_100("100 (100% Unlock)", "100 (100% अनलॉक)", 0x03.toByte())
+    SPEED_0("0 (Default / Unrestricted)", "0 (डिफ़ॉल्ट / अनियंत्रित)", 0x00.toByte()),
+    SPEED_15("15 (15 km/h Eco)", "15 (15 किमी/घंटा इको)", 0x01.toByte()),
+    SPEED_25("25 (25 km/h Standard)", "25 (25 किमी/घंटा मानक)", 0x02.toByte()),
+    SPEED_100("100 (100% Unlock)", "100 (100% अधिकतम अनलॉक)", 0x03.toByte())
 }
 
 enum class VibrationSensitivity(
@@ -33,9 +33,9 @@ enum class VibrationSensitivity(
     override val labelHi: String,
     override val payloadByte: Byte
 ) : SettingOption {
-    LOW("Low", "कम", 0x01.toByte()),
-    MEDIUM("Medium", "मध्यम", 0x02.toByte()),
-    HIGH("High", "ज्यादा", 0x03.toByte())
+    LOW("Low", "कम (धीमा)", 0x00.toByte()),
+    MEDIUM("Medium", "मध्यम (संतुलित)", 0x01.toByte()),
+    HIGH("High", "ज्यादा (अत्यधिक संवेदनशील)", 0x02.toByte())
 }
 
 enum class CyclingMode(
@@ -43,9 +43,9 @@ enum class CyclingMode(
     override val labelHi: String,
     override val payloadByte: Byte
 ) : SettingOption {
-    COMFORT("Comfort", "कम्फर्ट", 0x00.toByte()),
-    CROSS_COUNTRY("Cross-country", "क्रॉस-कंट्री", 0x01.toByte()),
-    CROSS_COUNTRY_PLUS("Cross-country Plus", "क्रॉस-कंट्री प्लस", 0x02.toByte()),
+    COMFORT("Energy Saving / Comfort", "कम्फर्ट / ऊर्जा बचत", 0x00.toByte()),
+    CROSS_COUNTRY("Routine / Cross-country", "रूटीन / क्रॉस-कंट्री", 0x01.toByte()),
+    CROSS_COUNTRY_PLUS("Sport / Cross-country Plus", "स्पोर्ट / अधिकतम शक्ति", 0x02.toByte()),
     RACING("Racing", "रेसिंग", 0x03.toByte())
 }
 
@@ -55,7 +55,7 @@ enum class SlopeParkingOption(
     override val payloadByte: Byte
 ) : SettingOption {
     CLOSE("Close (Disabled)", "बंद (निष्क्रिय)", 0x00.toByte()),
-    OPEN("Open (Enabled)", "चालू (सक्रिय)", 0x01.toByte())
+    OPEN("Open (Hill Hold Enabled)", "चालू (सक्रिय)", 0x01.toByte())
 }
 
 enum class ToggleOption(
@@ -93,10 +93,10 @@ enum class SettingCategory(
     WELCOME_MODE("Welcome Mode", "वेलकम मोड", BleConstants.OPCODE_WELCOME_MODE),
     QUIET_MODE("Quiet Mode", "क्वाइट मोड", BleConstants.OPCODE_QUIET_MODE),
     TURN_SIGNAL_TONE("Turn Signal Tone", "इंडिकेटर टोन", BleConstants.OPCODE_TURN_SIGNAL_TONE),
-    VOICE_SETTINGS("Voice Settings", "वॉइस सेटिंग्स", BleConstants.OPCODE_VOICE_SETTINGS),
-    NFC_MANAGEMENT("NFC Card Management", "NFC कार्ड प्रबंधन", BleConstants.OPCODE_NFC_COMMAND, true),
-    SAFETY_SYSTEMS("PCS / TCS / ABS", "PCS / TCS / ABS", 0x90.toByte(), true),
-    INDUCTION_VOLTAGE("Induction / Voltage", "इंडक्शन / वोल्टेज", 0x85.toByte())
+    VOICE_SETTINGS("Voice Settings", "वॉइस सेटिंग्स", BleConstants.OPCODE_START_VOICE),
+    NFC_MANAGEMENT("NFC Card Management", "NFC कार्ड प्रबंधन", BleConstants.OPCODE_NFC_MODE, true),
+    SAFETY_SYSTEMS("PCS / TCS / ABS", "PCS / TCS / ABS", BleConstants.OPCODE_PCS, true),
+    INDUCTION_VOLTAGE("Induction / Voltage", "इंडक्शन / वोल्टेज", BleConstants.OPCODE_VOLTAGE_SETTING)
 }
 
 enum class YakuzaModel(
@@ -104,11 +104,12 @@ enum class YakuzaModel(
     val modelNameHi: String,
     val voltageNominal: String,
     val motorWattage: String,
-    val topSpeedKmh: Int
+    val topSpeedKmh: Int,
+    val fullChargeRangeKm: Int
 ) {
-    YAKUZA_RUBIE("Yakuza Rubie", "याकुज़ा रूबी", "60V / 72V", "1200W BLDC Hub", 55),
-    YAKUZA_KARISMA("Yakuza Karisma", "याकुज़ा करिश्मा", "60V Lithium", "1000W BLDC Hub", 50),
-    YAKUZA_DELTA("Yakuza Delta", "याकुज़ा डेल्टा", "60V / 72V Heavy", "1500W High Torque", 50),
-    YAKUZA_RAZOR("Yakuza Razor", "याकुज़ा रेज़र", "72V Sport", "2000W High Speed", 65),
-    YAKUZA_UNIVERSAL("Yakuza Smart EV", "याकुज़ा स्मार्ट ईवी", "48V / 60V / 72V", "Standard BLDC Controller", 45)
+    YAKUZA_RUBIE("Yakuza Rubie", "याकुज़ा रूबी", "60V / 72V", "1200W BLDC Hub", 55, 65),
+    YAKUZA_KARISMA("Yakuza Karisma", "याकुज़ा करिश्मा", "60V Lithium", "1000W BLDC Hub", 50, 60),
+    YAKUZA_DELTA("Yakuza Delta", "याकुज़ा डेल्टा", "60V / 72V Heavy", "1500W High Torque", 50, 70),
+    YAKUZA_RAZOR("Yakuza Razor", "याकुज़ा रेज़र", "72V Sport", "2000W High Speed", 65, 80),
+    YAKUZA_UNIVERSAL("Yakuza Smart EV", "याकुज़ा स्मार्ट ईवी", "48V / 60V / 72V", "Standard BLDC Controller", 45, 60)
 }

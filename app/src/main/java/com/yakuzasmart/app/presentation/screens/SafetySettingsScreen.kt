@@ -111,9 +111,9 @@ fun SafetySettingsScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = if (language == Language.HINDI)
-                                    "चढ़ाई पर रुकने पर स्कूटर को पीछे फिसलने से रोकता है (Opcode 0x51)"
+                                    "चढ़ाई पर रुकने पर स्कूटर को पीछे फिसलने से रोकता है (Opcode 0x3D)"
                                 else
-                                    "Electronic hill hold prevents roll-back on inclines (Opcode 0x51)",
+                                    "Electronic hill hold prevents roll-back on inclines (Opcode 0x3D)",
                                 fontSize = 12.sp,
                                 color = YakuzaTextSecondary
                             )

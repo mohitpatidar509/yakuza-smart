@@ -35,8 +35,10 @@ class BleManager(
         get() = bluetoothManager?.adapter
 
     private var activeGatt: BluetoothGatt? = null
-    private var writeCharacteristic: BluetoothGattCharacteristic? = null
-    private var notifyCharacteristic: BluetoothGattCharacteristic? = null
+    var writeCharacteristic: BluetoothGattCharacteristic? = null
+        private set
+    var notifyCharacteristic: BluetoothGattCharacteristic? = null
+        private set
 
     private val _isBluetoothEnabled = MutableStateFlow(bluetoothAdapter?.isEnabled == true)
     val isBluetoothEnabled: StateFlow<Boolean> = _isBluetoothEnabled.asStateFlow()
@@ -59,7 +61,6 @@ class BleManager(
     private val writeQueue = ConcurrentLinkedQueue<ByteArray>()
     private var isWriting = false
 
-    // BroadcastReceiver to monitor real-time Bluetooth ON/OFF toggles
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, intent: Intent?) {
             if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
@@ -152,7 +153,7 @@ class BleManager(
                         gatt?.requestMtu(BleConstants.TARGET_MTU)
                         gatt?.discoverServices()
                     } catch (e: Exception) {
-                        DiagnosticLogger.e("BleManager", "Error requesting MTU / discovering services: ${e.message}")
+                        DiagnosticLogger.e("BleManager", "Error discovering services: ${e.message}")
                     }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -174,23 +175,78 @@ class BleManager(
             }
 
             try {
-                DiagnosticLogger.i("BleManager", "Services discovered. Searching for 0xFFF0 service...")
-                val service = gatt.getService(BleConstants.SERVICE_UUID)
-                if (service == null) {
-                    DiagnosticLogger.w("BleManager", "FFF0 Service NOT found. Checking generic vendor services...")
-                    _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
-                    return
+                DiagnosticLogger.i("BleManager", "GATT Services Discovered: ${gatt.services.size} total")
+
+                var foundWrite: BluetoothGattCharacteristic? = null
+                var foundNotify: BluetoothGattCharacteristic? = null
+
+                // 1. Inspect all services and characteristics
+                for (service in gatt.services) {
+                    val sUuid = service.uuid
+                    DiagnosticLogger.i("BleManager", "Service: $sUuid")
+                    for (char in service.characteristics) {
+                        val props = char.properties
+                        val hasWrite = (props and (BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE)) != 0
+                        val hasNotify = (props and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE)) != 0
+                        DiagnosticLogger.i("BleManager", "  -> Char: ${char.uuid} [Write=$hasWrite, Notify=$hasNotify]")
+
+                        // Check known standard e-scooter UUIDs
+                        if (char.uuid == BleConstants.WRITE_CHAR_FFF2 ||
+                            char.uuid == BleConstants.CHAR_UUID_FFE1 ||
+                            char.uuid == BleConstants.NORDIC_UART_RX) {
+                            foundWrite = char
+                        }
+                        if (char.uuid == BleConstants.NOTIFY_CHAR_FFF1 ||
+                            char.uuid == BleConstants.CHAR_UUID_FFE1 ||
+                            char.uuid == BleConstants.NORDIC_UART_TX) {
+                            foundNotify = char
+                        }
+                    }
                 }
 
-                writeCharacteristic = service.getCharacteristic(BleConstants.WRITE_CHAR_UUID)
-                notifyCharacteristic = service.getCharacteristic(BleConstants.NOTIFY_CHAR_UUID)
+                // 2. Dynamic Fallback: If not found in known UUID table, pick first writable & notifiable characteristic!
+                if (foundWrite == null || foundNotify == null) {
+                    for (service in gatt.services) {
+                        // Skip standard generic access/attribute profiles (0x1800, 0x1801)
+                        val sStr = service.uuid.toString()
+                        if (sStr.startsWith("00001800") || sStr.startsWith("00001801")) continue
+
+                        for (char in service.characteristics) {
+                            val props = char.properties
+                            if (foundWrite == null && (props and (BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE)) != 0) {
+                                foundWrite = char
+                            }
+                            if (foundNotify == null && (props and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE)) != 0) {
+                                foundNotify = char
+                            }
+                        }
+                    }
+                }
+
+                writeCharacteristic = foundWrite
+                notifyCharacteristic = foundNotify
+
+                if (writeCharacteristic != null) {
+                    val props = writeCharacteristic!!.properties
+                    val writeType = if ((props and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0) {
+                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    } else {
+                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    }
+                    writeCharacteristic!!.writeType = writeType
+                    DiagnosticLogger.i("BleManager", "SUCCESS: Selected Write Pipe: ${writeCharacteristic!!.uuid} (Type=$writeType)")
+                } else {
+                    DiagnosticLogger.e("BleManager", "WARNING: No writable characteristic found on this device!")
+                }
 
                 if (notifyCharacteristic != null) {
                     enableNotifications(gatt, notifyCharacteristic!!)
+                    DiagnosticLogger.i("BleManager", "SUCCESS: Selected Notify Pipe: ${notifyCharacteristic!!.uuid}")
+                } else {
+                    DiagnosticLogger.w("BleManager", "No notify characteristic found.")
                 }
 
                 _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
-                DiagnosticLogger.i("BleManager", "BLE Setup Complete. Communication channel open.")
             } catch (e: Exception) {
                 DiagnosticLogger.e("BleManager", "Error in onServicesDiscovered: ${e.message}")
                 _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
@@ -202,7 +258,7 @@ class BleManager(
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray
         ) {
-            DiagnosticLogger.rx("BleManager", "Inbound packet on FFF1", value)
+            DiagnosticLogger.rx("BleManager", "Inbound packet on ${characteristic.uuid}", value)
             scope.launch {
                 _inboundPackets.emit(value)
             }
@@ -215,7 +271,7 @@ class BleManager(
         ) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 val value = characteristic?.value ?: return
-                DiagnosticLogger.rx("BleManager", "Inbound packet on FFF1 (Legacy API)", value)
+                DiagnosticLogger.rx("BleManager", "Inbound packet on ${characteristic.uuid} (Legacy)", value)
                 scope.launch {
                     _inboundPackets.emit(value)
                 }
@@ -229,7 +285,7 @@ class BleManager(
         ) {
             isWriting = false
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                DiagnosticLogger.i("BleManager", "Packet write success to FFF2")
+                DiagnosticLogger.i("BleManager", "Packet write success to ${characteristic?.uuid}")
             } else {
                 DiagnosticLogger.e("BleManager", "Packet write failed with status $status")
             }
@@ -237,14 +293,9 @@ class BleManager(
         }
     }
 
-    /**
-     * Safely initiates BLE discovery with comprehensive permission and Bluetooth state checks.
-     * Guaranteed never to throw an unhandled exception or crash the app.
-     */
     fun startScan(): Boolean {
         _scanError.value = null
 
-        // 1. Check if Bluetooth hardware is available
         val adapter = bluetoothAdapter
         if (adapter == null) {
             _scanError.value = "Bluetooth is not supported on this device"
@@ -252,7 +303,6 @@ class BleManager(
             return false
         }
 
-        // 2. Check if Bluetooth is enabled
         if (!adapter.isEnabled) {
             _isBluetoothEnabled.value = false
             _scanError.value = "Bluetooth is turned OFF. Please turn on Bluetooth in settings."
@@ -261,21 +311,18 @@ class BleManager(
         }
         _isBluetoothEnabled.value = true
 
-        // 3. Check Android runtime permissions
         if (!BluetoothPermissionHelper.hasRequiredPermissions(context)) {
             _scanError.value = "Bluetooth permissions are required to scan for scooters."
             DiagnosticLogger.w("BleManager", _scanError.value!!)
             return false
         }
 
-        // 4. Check location service on legacy Android (Android 11 and lower)
         if (!BluetoothPermissionHelper.isLocationEnabledForBle(context)) {
             _scanError.value = "Please turn on GPS/Location services for Bluetooth scanning on this Android version."
             DiagnosticLogger.w("BleManager", _scanError.value!!)
             return false
         }
 
-        // 5. Safely start scan inside try-catch to prevent OS SecurityException crashes
         try {
             val scanner = adapter.bluetoothLeScanner
             if (scanner == null) {
@@ -395,7 +442,7 @@ class BleManager(
                     @Suppress("DEPRECATION")
                     gatt.writeDescriptor(descriptor)
                 }
-                DiagnosticLogger.i("BleManager", "Subscribed to CCCD 0x2902 notifications on FFF1.")
+                DiagnosticLogger.i("BleManager", "Subscribed to CCCD notifications on ${characteristic.uuid}")
             }
         } catch (e: Exception) {
             DiagnosticLogger.w("BleManager", "Failed to subscribe notifications: ${e.message}")
@@ -412,24 +459,41 @@ class BleManager(
     @Synchronized
     private fun processNextWrite() {
         val gatt = activeGatt ?: return
-        val char = writeCharacteristic ?: return
+        val char = writeCharacteristic
+        if (char == null) {
+            DiagnosticLogger.w("BleManager", "Cannot write packet: writeCharacteristic is not ready.")
+            writeQueue.clear()
+            isWriting = false
+            return
+        }
+
         if (isWriting || writeQueue.isEmpty()) return
 
         val packet = writeQueue.poll() ?: return
         isWriting = true
 
-        DiagnosticLogger.tx("BleManager", "Dispatching packet to FFF2", packet)
+        DiagnosticLogger.tx("BleManager", "Dispatching to ${char.uuid} (Type=${char.writeType})", packet)
 
         try {
+            val isNoResponse = (char.writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt.writeCharacteristic(char, packet, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                gatt.writeCharacteristic(char, packet, char.writeType)
             } else {
                 @Suppress("DEPRECATION")
                 char.value = packet
                 @Suppress("DEPRECATION")
-                char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                @Suppress("DEPRECATION")
                 gatt.writeCharacteristic(char)
+            }
+
+            // For WRITE_TYPE_NO_RESPONSE, peripheral does not trigger onCharacteristicWrite callback,
+            // so release lock immediately after a short 30ms throttle!
+            if (isNoResponse) {
+                scope.launch {
+                    delay(35)
+                    isWriting = false
+                    processNextWrite()
+                }
             }
         } catch (e: Exception) {
             DiagnosticLogger.e("BleManager", "Exception during writeCharacteristic: ${e.message}")

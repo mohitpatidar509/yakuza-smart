@@ -17,10 +17,11 @@ data class VehicleFaults(
     val overvoltage: Boolean = false,
     val undervoltage: Boolean = false,
     val overtemperature: Boolean = false,
-    val alarmTriggered: Boolean = false
+    val alarmTriggered: Boolean = false,
+    val controllerError: Boolean = false
 ) {
     val hasFault: Boolean
-        get() = throttleError || motorHallError || overvoltage || undervoltage || overtemperature
+        get() = throttleError || motorHallError || overvoltage || undervoltage || overtemperature || controllerError
 }
 
 data class ScooterState(
@@ -29,13 +30,23 @@ data class ScooterState(
     val isSimulated: Boolean = false,
     val lastSeenTimestamp: Long = 0L,
 
-    // Real Telemetry Values (null when disconnected / unavailable)
+    // Real Remote Control & Vehicle State (From 0x1F notification)
+    val isIgnitionOn: Boolean = false,
+    val isLocked: Boolean = false,
+    val isCushionOpen: Boolean = false,
+    val isChildModeOn: Boolean = false,
+    val isMuteOn: Boolean = false,
+
+    // Real Telemetry Values (null when disconnected / waiting for controller data)
     val speedKmh: Float? = null,
     val batteryPercent: Int? = null,
     val batteryVoltageVolts: Float? = null,
     val motorCurrentAmps: Float? = null,
     val controllerTempCelsius: Int? = null,
     val estimatedRangeKm: Int? = null,
+    val totalMileageKm: Float? = null,
+    val tripMileageKm: Float? = null,
+    val isCharging: Boolean = false,
     val faults: VehicleFaults = VehicleFaults(),
 
     // Current Controller Active Settings (as reported by controller)
@@ -44,6 +55,9 @@ data class ScooterState(
     val activeCyclingMode: CyclingMode? = null,
     val activeVibrationSensitivity: VibrationSensitivity? = null,
     val activeSlopeParking: Boolean? = null,
+
+    // Vehicle Hardware Profile
+    val selectedModel: YakuzaModel = YakuzaModel.YAKUZA_RUBIE,
 
     // Raw Controller Telemetry Counter
     val packetsReceivedCount: Long = 0L,

@@ -16,14 +16,16 @@ class BleSimulator(
     private val _inboundPackets = MutableSharedFlow<ByteArray>(replay = 0)
     val inboundPackets: SharedFlow<ByteArray> = _inboundPackets.asSharedFlow()
 
-    // Virtual Controller Volatile SRAM State
-    private var simulatedSpeedKmh: Float = 0.0f
-    private var simulatedBatteryPercent: Int = 85
-    private var simulatedVoltageVolts: Float = 54.2f
-    private var simulatedCurrentAmps: Float = 0.0f
-    private var simulatedTempC: Int = 32
+    // Virtual Controller State
+    private var ramIgnition: Boolean = false
+    private var ramLocked: Boolean = false
+    private var ramSpeedKmh: Float = 0.0f
+    private var ramBatteryPercent: Int = 85
+    private var ramVoltageVolts: Float = 63.8f
+    private var ramCurrentAmps: Float = 0.0f
+    private var ramTempC: Int = 34
 
-    // Volatile Settings (Reset to defaults upon power cycle)
+    // Volatile Settings
     private var ramStartupMode: StartupMode = StartupMode.SOFT_START
     private var ramSpeedGear: SpeedRegulationOption = SpeedRegulationOption.SPEED_0
     private var ramVibration: VibrationSensitivity = VibrationSensitivity.MEDIUM
@@ -35,9 +37,16 @@ class BleSimulator(
         telemetryJob = scope.launch(Dispatchers.Default) {
             DiagnosticLogger.i("BleSimulator", "Virtual Yakuza Controller Telemetry Loop Started (1 Hz)")
             while (isActive) {
-                val frame = buildVirtualTelemetryFrame()
-                _inboundPackets.emit(frame)
-                delay(BleConstants.TELEMETRY_POLL_INTERVAL_MS)
+                // Alternately emit 0x1F Status frame and 0x2F Electrical frame
+                val frame1f = buildVirtualStatus1fFrame()
+                _inboundPackets.emit(frame1f)
+
+                delay(500)
+
+                val frame2f = buildVirtualElectrical2fFrame()
+                _inboundPackets.emit(frame2f)
+
+                delay(500)
             }
         }
     }
@@ -48,116 +57,168 @@ class BleSimulator(
         DiagnosticLogger.i("BleSimulator", "Virtual Controller Stopped")
     }
 
-    /**
-     * Handles an outbound command written by the app.
-     * Emulates controller piezo buzzer beep and returns an ACK frame.
-     */
     suspend fun handleOutboundWrite(packet: ByteArray) {
         if (!BleProtocolHandler.validateFrame(packet)) {
             DiagnosticLogger.w("BleSimulator", "Invalid packet received by simulator")
             return
         }
 
-        val opcode = packet[3]
-        DiagnosticLogger.i("BleSimulator", "Virtual Controller received Opcode 0x%02X".format(opcode))
+        // Layout: [0x88, 0x01, len, cmdType, cmdGroup, opcode, ...payload, chk]
+        val isFullFramed = packet.size >= 7 && packet[3] == BleConstants.CMD_TYPE
+        val opcode = if (isFullFramed) packet[5] else packet[3]
+        val paramArray = if (isFullFramed && packet.size > 7) {
+            packet.copyOfRange(7, packet.size - 1)
+        } else if (packet.size > 4) {
+            packet.copyOfRange(4, packet.size - 1)
+        } else {
+            byteArrayOf()
+        }
 
-        // Emulate controller processing delay (50-100ms)
-        delay(80)
+        DiagnosticLogger.i("BleSimulator", "Virtual Controller received Opcode 0x%02X".format(opcode))
+        delay(60) // Emulate controller processing latency
 
         when (opcode) {
+            BleConstants.OPCODE_HANDSHAKE -> {
+                // Echo handshake ACK with virtual MAC: "YK:Z8:60:V1:22:99"
+                val macPayload = byteArrayOf(0x06.toByte(), 0xAA.toByte(), 0xBB.toByte(), 0xCC.toByte(), 0xDD.toByte(), 0xEE.toByte(), 0xFF.toByte())
+                val ack = BleProtocolHandler.buildPacket(BleConstants.OPCODE_HANDSHAKE, macPayload, cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                _inboundPackets.emit(ack)
+            }
+            BleConstants.OPCODE_IGNITION -> {
+                val isStart = if (paramArray.isNotEmpty()) paramArray[0] == 0x01.toByte() else false
+                ramIgnition = isStart
+                ramSpeedKmh = if (isStart) 28.0f else 0.0f
+                ramCurrentAmps = if (isStart) 4.5f else 0.0f
+                DiagnosticLogger.i("BleSimulator", "Virtual Ignition changed: $ramIgnition. Piezo beep emitted!")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(if (isStart) 0x01 else 0x00), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                _inboundPackets.emit(ack)
+            }
+            BleConstants.OPCODE_ALERT_LOCK -> {
+                val isLock = if (paramArray.isNotEmpty()) paramArray[0] == 0x01.toByte() else false
+                ramLocked = isLock
+                DiagnosticLogger.i("BleSimulator", "Virtual Anti-Theft Lock: $ramLocked. Horn chime sounded!")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(if (isLock) 0x01 else 0x00), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                _inboundPackets.emit(ack)
+            }
+            BleConstants.OPCODE_WHISTLE_FIND -> {
+                DiagnosticLogger.i("BleSimulator", "Virtual Siren / Whistle Sounded! *BEEP BEEP BEEP*")
+            }
+            BleConstants.OPCODE_SEAT_CUSHION -> {
+                DiagnosticLogger.i("BleSimulator", "Virtual Seat Solenoid Clicked! Trunk Unlocked.")
+            }
             BleConstants.OPCODE_STARTUP_MODE -> {
-                val valByte = packet[4]
+                val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramStartupMode = if (valByte == 0x01.toByte()) StartupMode.HARD_BOOT else StartupMode.SOFT_START
-                DiagnosticLogger.i("BleSimulator", "SRAM updated: StartupMode = $ramStartupMode. Piezo Beep Emitted!")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte))
+                DiagnosticLogger.i("BleSimulator", "SRAM updated: StartupMode = $ramStartupMode")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_SPEED_REGULATION -> {
-                val valByte = packet[4]
+                val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramSpeedGear = SpeedRegulationOption.entries.find { it.payloadByte == valByte } ?: SpeedRegulationOption.SPEED_0
-                DiagnosticLogger.i("BleSimulator", "SRAM updated: SpeedGear = $ramSpeedGear. Piezo Beep Emitted!")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte))
+                DiagnosticLogger.i("BleSimulator", "SRAM updated: SpeedGear = $ramSpeedGear")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_VIBRATION_SENSITIVITY -> {
-                val valByte = packet[4]
+                val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x01.toByte()
                 ramVibration = VibrationSensitivity.entries.find { it.payloadByte == valByte } ?: VibrationSensitivity.MEDIUM
-                DiagnosticLogger.i("BleSimulator", "SRAM updated: Vibration = $ramVibration. Piezo Beep Emitted!")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte))
+                DiagnosticLogger.i("BleSimulator", "SRAM updated: Vibration = $ramVibration")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_CYCLING_MODE -> {
-                val valByte = packet[4]
+                val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramCyclingMode = CyclingMode.entries.find { it.payloadByte == valByte } ?: CyclingMode.COMFORT
-                DiagnosticLogger.i("BleSimulator", "SRAM updated: CyclingMode = $ramCyclingMode. Piezo Beep Emitted!")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte))
+                DiagnosticLogger.i("BleSimulator", "SRAM updated: CyclingMode = $ramCyclingMode")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_SLOPE_PARKING -> {
-                val valByte = packet[4]
+                val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramSlopeParking = SlopeParkingOption.entries.find { it.payloadByte == valByte } ?: SlopeParkingOption.CLOSE
-                DiagnosticLogger.i("BleSimulator", "SRAM updated: SlopeParking = $ramSlopeParking. Piezo Beep Emitted!")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte))
+                DiagnosticLogger.i("BleSimulator", "SRAM updated: SlopeParking = $ramSlopeParking")
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
-            BleConstants.OPCODE_QUERY_STATUS -> {
-                val frame = buildVirtualTelemetryFrame()
-                _inboundPackets.emit(frame)
-            }
             else -> {
-                DiagnosticLogger.i("BleSimulator", "Generic opcode ACK emitted: 0x%02X".format(opcode))
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01))
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
         }
     }
 
-    /**
-     * Simulates the scooter physical power-cycle (Key OFF, wait, Key ON).
-     * Demonstrates the volatile RAM reset defect by resetting registers to defaults!
-     */
     fun simulatePowerCycle() {
         DiagnosticLogger.w("BleSimulator", "SIMULATED POWER CYCLE TRIGGERED: Cutting power to controller MCU...")
-        // Volatile SRAM lost!
+        ramIgnition = false
+        ramSpeedKmh = 0.0f
+        ramCurrentAmps = 0.0f
         ramStartupMode = StartupMode.SOFT_START
         ramSpeedGear = SpeedRegulationOption.SPEED_0
         ramVibration = VibrationSensitivity.MEDIUM
         ramCyclingMode = CyclingMode.COMFORT
         ramSlopeParking = SlopeParkingOption.CLOSE
-        DiagnosticLogger.i("BleSimulator", "Controller MCU rebooted. Volatile registers reverted to factory defaults.")
+        DiagnosticLogger.i("BleSimulator", "Controller MCU rebooted. Volatile registers reverted to defaults.")
     }
 
-    private fun buildVirtualTelemetryFrame(): ByteArray {
-        val payload = ByteArray(12)
-        // Speed in 0.1 km/h
-        val spdInt = (simulatedSpeedKmh * 10).toInt()
-        payload[0] = ((spdInt shr 8) and 0xFF).toByte()
-        payload[1] = (spdInt and 0xFF).toByte()
+    private fun buildVirtualStatus1fFrame(): ByteArray {
+        val p = ByteArray(36)
+        p[0] = if (ramIgnition) 0x01.toByte() else 0x00.toByte()
+        p[5] = if (ramLocked) 0x01.toByte() else 0x00.toByte()
+        p[13] = ramSpeedKmh.toInt().toByte()
+        p[16] = ramBatteryPercent.toByte()
 
-        // Battery percent
-        payload[2] = (simulatedBatteryPercent and 0xFF).toByte()
+        // ODO: 1,450 km (0x00, 0x00, 0x05, 0xAA)
+        p[17] = 0x00.toByte()
+        p[18] = 0x00.toByte()
+        p[19] = 0x05.toByte()
+        p[20] = 0xAA.toByte()
 
-        // Voltage in 0.1 V
-        val voltInt = (simulatedVoltageVolts * 10).toInt()
-        payload[3] = ((voltInt shr 8) and 0xFF).toByte()
-        payload[4] = (voltInt and 0xFF).toByte()
+        // Trip: 24 km
+        p[21] = 0x00.toByte()
+        p[22] = 0x00.toByte()
+        p[23] = 0x00.toByte()
+        p[24] = 0x18.toByte()
 
-        // Current in 0.1 A
-        val currInt = (simulatedCurrentAmps * 10).toInt()
-        payload[5] = (currInt and 0xFF).toByte()
+        // Faults = 0x00 (Normal)
+        p[26] = 0x00.toByte()
 
-        // Temp with +40 offset
-        payload[6] = ((simulatedTempC + 40) and 0xFF).toByte()
+        // Cushion lock
+        p[28] = 0x00.toByte()
 
-        // Fault bits (0 = Normal)
-        payload[7] = 0x00.toByte()
+        val payload = ByteArray(1 + p.size)
+        payload[0] = p.size.toByte()
+        System.arraycopy(p, 0, payload, 1, p.size)
 
-        // Current settings
-        payload[8] = ramStartupMode.payloadByte
-        payload[9] = ramSpeedGear.payloadByte
-        payload[10] = ramCyclingMode.payloadByte
-        payload[11] = 0x00.toByte() // Reserved
+        return BleProtocolHandler.buildPacket(
+            opcode = BleConstants.OPCODE_NOTIFY_STATUS_1F,
+            payload = payload,
+            cmdGroup = BleConstants.CMD_GROUP_NOTIFY
+        )
+    }
 
-        return BleProtocolHandler.buildPacket(BleConstants.OPCODE_QUERY_STATUS, payload)
+    private fun buildVirtualElectrical2fFrame(): ByteArray {
+        val p = ByteArray(22)
+        p[9] = ramCyclingMode.payloadByte
+        p[10] = (ramCurrentAmps * 10).toInt().toByte()
+        p[11] = ramTempC.toByte()
+        p[12] = 28.toByte()
+        p[13] = (ramTempC + 4).toByte()
+        p[15] = 0x00.toByte() // Not charging
+
+        // Min monomer / pack voltage: 63.8 V * 1000 = 63800 = 0xF938
+        val voltVal = (ramVoltageVolts * 1000).toInt()
+        p[16] = ((voltVal shr 8) and 0xFF).toByte()
+        p[17] = (voltVal and 0xFF).toByte()
+
+        val payload = ByteArray(1 + p.size)
+        payload[0] = p.size.toByte()
+        System.arraycopy(p, 0, payload, 1, p.size)
+
+        return BleProtocolHandler.buildPacket(
+            opcode = BleConstants.OPCODE_NOTIFY_ELECTRICAL_2F,
+            payload = payload,
+            cmdGroup = BleConstants.CMD_GROUP_NOTIFY
+        )
     }
 }

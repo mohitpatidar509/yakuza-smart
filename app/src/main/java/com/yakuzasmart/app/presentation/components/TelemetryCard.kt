@@ -5,6 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,7 +36,7 @@ fun TelemetryCard(
             .padding(18.dp)
     ) {
         Column {
-            // Speed and Connection Row
+            // Speed and Battery Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -54,7 +57,7 @@ fun TelemetryCard(
                             } else {
                                 "--"
                             },
-                            fontSize = 48.sp,
+                            fontSize = 46.sp,
                             fontWeight = FontWeight.Black,
                             color = if (state.isConnected) YakuzaOrangePrimary else YakuzaTextMuted
                         )
@@ -69,12 +72,30 @@ fun TelemetryCard(
 
                 // Battery Pill
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = AppStrings.battery(language).uppercase(),
-                        color = YakuzaTextMuted,
-                        fontSize = 11.sp,
-                        letterSpacing = 1.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (state.isCharging) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = "Charging",
+                                tint = YakuzaStatusConnected,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (language == Language.HINDI) "चार्जिंग" else "CHARGING",
+                                color = YakuzaStatusConnected,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = AppStrings.battery(language).uppercase(),
+                            color = YakuzaTextMuted,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.sp
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -97,9 +118,16 @@ fun TelemetryCard(
                             } else {
                                 "-- %"
                             },
-                            fontSize = 20.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = YakuzaTextPrimary
+                        )
+                    }
+                    if (state.isConnected && state.batteryPercent == null) {
+                        Text(
+                            text = if (language == Language.HINDI) "लाइव डेटा प्रतीक्षा..." else "Awaiting live data...",
+                            fontSize = 10.sp,
+                            color = YakuzaTextMuted
                         )
                     }
                 }
@@ -128,6 +156,31 @@ fun TelemetryCard(
                     label = AppStrings.controllerTemp(language),
                     value = if (state.isConnected && state.controllerTempCelsius != null) "${state.controllerTempCelsius}°C" else "--"
                 )
+            }
+
+            // Odometer & Trip row
+            if (state.isConnected && (state.totalMileageKm != null || state.tripMileageKm != null)) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(YakuzaCardBackground, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = (if (language == Language.HINDI) "कुल दूरी (ODO): " else "Odo: ") +
+                                (if (state.totalMileageKm != null) "%.0f km".format(state.totalMileageKm) else "--"),
+                        fontSize = 11.sp,
+                        color = YakuzaTextSecondary
+                    )
+                    Text(
+                        text = (if (language == Language.HINDI) "ट्रिप: " else "Trip: ") +
+                                (if (state.tripMileageKm != null) "%.1f km".format(state.tripMileageKm) else "--"),
+                        fontSize = 11.sp,
+                        color = YakuzaTextSecondary
+                    )
+                }
             }
 
             // Fault Warnings Bar if active

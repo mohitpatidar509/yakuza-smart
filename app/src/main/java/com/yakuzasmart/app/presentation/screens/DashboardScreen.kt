@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +43,10 @@ fun DashboardScreen(
     onForgetSavedScooter: () -> Unit,
     onNavigateToScan: () -> Unit,
     onDisconnect: () -> Unit,
+    onToggleIgnition: () -> Unit,
+    onToggleLock: () -> Unit,
+    onFindVehicle: () -> Unit,
+    onOpenSeat: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToNfc: () -> Unit,
     onNavigateToDiagnostics: () -> Unit,
@@ -68,7 +75,7 @@ fun DashboardScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. BLUETOOTH OFF ALERT CARD (If Bluetooth is turned off on the phone)
+            // 1. BLUETOOTH OFF ALERT CARD
             if (!isBluetoothEnabled) {
                 Box(
                     modifier = Modifier
@@ -111,7 +118,6 @@ fun DashboardScreen(
                                     enableBtIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     context.startActivity(enableBtIntent)
                                 } catch (e: Exception) {
-                                    // Fallback to general Bluetooth settings
                                     context.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).apply {
                                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     })
@@ -191,7 +197,7 @@ fun DashboardScreen(
                     }
                 }
             } else if (savedScooter != null) {
-                // SAVED SCOOTER CARD (Reconnection requested by user)
+                // SAVED SCOOTER CARD
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -234,7 +240,6 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // 1-Tap Connect to Saved Scooter
                             Button(
                                 onClick = onConnectSavedScooter,
                                 enabled = isBluetoothEnabled,
@@ -242,7 +247,7 @@ fun DashboardScreen(
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = YakuzaOrangePrimary,
-                                    contentColor = androidx.compose.ui.graphics.Color.White,
+                                    contentColor = Color.White,
                                     disabledContainerColor = YakuzaCardBackground,
                                     disabledContentColor = YakuzaTextMuted
                                 )
@@ -256,7 +261,6 @@ fun DashboardScreen(
                                 )
                             }
 
-                            // Scan Different Scooter
                             Button(
                                 onClick = onNavigateToScan,
                                 modifier = Modifier.height(44.dp),
@@ -286,7 +290,7 @@ fun DashboardScreen(
                     }
                 }
             } else {
-                // NO SCOOTER SAVED YET (Initial Setup)
+                // NO SCOOTER SAVED YET
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -319,7 +323,7 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = YakuzaOrangePrimary,
-                                contentColor = androidx.compose.ui.graphics.Color.White
+                                contentColor = Color.White
                             ),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
@@ -333,13 +337,148 @@ fun DashboardScreen(
                 }
             }
 
-            // Real Telemetry Display
+            // 3. VEHICLE CONTROL PANEL (Ignition ON/OFF, Lock/Unlock, Siren, Seat)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(YakuzaDarkCharcoal, RoundedCornerShape(20.dp))
+                    .border(
+                        1.5.dp,
+                        if (state.isConnected && state.isIgnitionOn) YakuzaStatusConnected.copy(alpha = 0.8f) else YakuzaCardBorder,
+                        RoundedCornerShape(20.dp)
+                    )
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (language == Language.HINDI) "वाहन रिमोट कंट्रोल" else "REMOTE VEHICLE CONTROLS",
+                            color = YakuzaOrangePrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+
+                        // Power Status Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (!state.isConnected) YakuzaCardBackground
+                                    else if (state.isIgnitionOn) YakuzaStatusConnected.copy(alpha = 0.2f)
+                                    else YakuzaStatusWarning.copy(alpha = 0.2f)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (!state.isConnected)
+                                    (if (language == Language.HINDI) "डिस्कनेक्टेड" else "OFFLINE")
+                                else if (state.isIgnitionOn)
+                                    (if (language == Language.HINDI) "गाड़ी चालू है (ON)" else "IGNITION ON")
+                                else
+                                    (if (language == Language.HINDI) "स्टैंडबाय (OFF)" else "STANDBY (OFF)"),
+                                color = if (!state.isConnected) YakuzaTextMuted
+                                else if (state.isIgnitionOn) YakuzaStatusConnected
+                                else YakuzaStatusWarning,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Main Ignition Switch Button
+                    Button(
+                        onClick = onToggleIgnition,
+                        enabled = state.isConnected,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (state.isIgnitionOn) Color(0xFFD32F2F) else Color(0xFF2E7D32),
+                            contentColor = Color.White,
+                            disabledContainerColor = YakuzaCardBackground,
+                            disabledContentColor = YakuzaTextMuted
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = "Ignition Power",
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (!state.isConnected)
+                                (if (language == Language.HINDI) "कंट्रोल के लिए कनेक्ट करें" else "Connect to Control Bike")
+                            else if (state.isIgnitionOn)
+                                (if (language == Language.HINDI) "गाड़ी बंद करें (POWER OFF)" else "TURN VEHICLE OFF")
+                            else
+                                (if (language == Language.HINDI) "गाड़ी चालू करें (POWER ON)" else "START VEHICLE (POWER ON)"),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Secondary Remote Buttons Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Anti-Theft Lock
+                        VehicleActionButton(
+                            icon = if (state.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            label = if (state.isLocked)
+                                (if (language == Language.HINDI) "अनलॉक" else "Unlock")
+                            else
+                                (if (language == Language.HINDI) "सुरक्षा लॉक" else "Lock Guard"),
+                            isActive = state.isLocked,
+                            activeColor = YakuzaStatusWarning,
+                            enabled = state.isConnected,
+                            onClick = onToggleLock,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        // Siren / Find Scooter
+                        VehicleActionButton(
+                            icon = Icons.Default.VolumeUp,
+                            label = if (language == Language.HINDI) "सायरन / खोजें" else "Find Horn",
+                            isActive = false,
+                            activeColor = YakuzaOrangePrimary,
+                            enabled = state.isConnected,
+                            onClick = onFindVehicle,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        // Open Seat / Trunk
+                        VehicleActionButton(
+                            icon = Icons.Default.AirlineSeatReclineNormal,
+                            label = if (language == Language.HINDI) "सीट खोलें" else "Open Seat",
+                            isActive = false,
+                            activeColor = YakuzaOrangePrimary,
+                            enabled = state.isConnected,
+                            onClick = onOpenSeat,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // 4. Real Telemetry Display
             TelemetryCard(state = state, language = language)
 
-            // Safety Warning Banner
+            // 5. Safety Warning Banner
             SafetyWarningBanner(language = language)
 
-            // Quick Hub Actions
+            // 6. Quick Hub Actions
             Text(
                 text = if (language == Language.HINDI) "क्विक मेनू" else "QUICK ACTIONS",
                 color = YakuzaOrangePrimary,
@@ -359,9 +498,9 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f)
                 )
                 HubCard(
-                    title = AppStrings.diagnostics(language),
-                    icon = Icons.Default.Assessment,
-                    onClick = onNavigateToDiagnostics,
+                    title = AppStrings.nfcCards(language),
+                    icon = Icons.Default.Nfc,
+                    onClick = onNavigateToNfc,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -371,14 +510,14 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 HubCard(
-                    title = AppStrings.nfcManagement(language),
-                    icon = Icons.Default.CreditCard,
-                    onClick = onNavigateToNfc,
+                    title = AppStrings.diagnostics(language),
+                    icon = Icons.Default.Build,
+                    onClick = onNavigateToDiagnostics,
                     modifier = Modifier.weight(1f)
                 )
                 HubCard(
                     title = AppStrings.vehicleInfo(language),
-                    icon = Icons.Default.Info,
+                    icon = Icons.Default.ElectricScooter,
                     onClick = onNavigateToVehicleInfo,
                     modifier = Modifier.weight(1f)
                 )
@@ -397,6 +536,52 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun VehicleActionButton(
+    icon: ImageVector,
+    label: String,
+    isActive: Boolean,
+    activeColor: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isActive) activeColor.copy(alpha = 0.2f) else YakuzaCardBackground)
+            .border(
+                1.dp,
+                if (isActive) activeColor else YakuzaCardBorder,
+                RoundedCornerShape(12.dp)
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (!enabled) YakuzaTextMuted else if (isActive) activeColor else YakuzaTextPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = label,
+                color = if (!enabled) YakuzaTextMuted else if (isActive) activeColor else YakuzaTextSecondary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
 private fun HubCard(
     title: String,
     icon: ImageVector,
@@ -405,24 +590,45 @@ private fun HubCard(
 ) {
     Box(
         modifier = modifier
-            .background(YakuzaDarkCharcoal, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(YakuzaDarkCharcoal)
             .border(1.dp, YakuzaCardBorder, RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(YakuzaOrangePrimary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = YakuzaOrangePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = title,
+                    color = YakuzaTextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
             Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = YakuzaOrangePrimary,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = YakuzaTextPrimary
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = YakuzaTextMuted,
+                modifier = Modifier.size(18.dp)
             )
         }
     }
