@@ -498,7 +498,7 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f)
                 )
                 HubCard(
-                    title = AppStrings.nfcCards(language),
+                    title = AppStrings.nfcManagement(language),
                     icon = Icons.Default.Nfc,
                     onClick = onNavigateToNfc,
                     modifier = Modifier.weight(1f)
@@ -560,7 +560,7 @@ private fun VehicleActionButton(
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
