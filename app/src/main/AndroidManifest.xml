@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
 
     <application 
+        android:name=".YakuzaApplication"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:label="Yakuza Smart" 
         android:icon="@android:drawable/ic_dialog_info"

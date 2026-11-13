@@ -13,16 +13,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -115,7 +111,7 @@ fun DashboardScreen(
             )
             TabPill(
                 title = if (language == Language.HINDI) "मार्ग व खोज" else "Where To",
-                icon = Icons.Default.Place,
+                icon = Icons.Default.LocationOn,
                 isSelected = selectedTab == DashboardTab.EXPLORE,
                 onClick = { selectedTab = DashboardTab.EXPLORE },
                 modifier = Modifier.weight(1f)
@@ -595,7 +591,7 @@ fun DashboardScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = if (isIgnitionOn) Icons.Default.PlayArrow else Icons.AutoMirrored.Filled.ArrowForward,
+                                                    imageVector = if (isIgnitionOn) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.ArrowForward,
                                                     contentDescription = null,
                                                     tint = if (isIgnitionOn) Color(0xFFDC2626) else OlaGreenDark,
                                                     modifier = Modifier.size(18.dp)
@@ -638,7 +634,7 @@ fun DashboardScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                icon = Icons.Default.Build,
+                                icon = Icons.Default.Lock,
                                 label = if (language == Language.HINDI) "सीट ट्रंक खोलें" else "Open Trunk",
                                 onClick = onOpenSeat,
                                 enabled = state.isConnected,
@@ -791,7 +787,7 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     QuickPlaceChip(icon = Icons.Default.Home, name = "Home", time = "12 min")
-                                    QuickPlaceChip(icon = Icons.Default.Build, name = "Work", time = "18 min")
+                                    QuickPlaceChip(icon = Icons.Default.Star, name = "Work", time = "18 min")
                                     QuickPlaceChip(icon = Icons.Default.Star, name = "University", time = "15 min")
                                     QuickPlaceChip(icon = Icons.Default.ShoppingCart, name = "Mall", time = "20 min")
                                 }
@@ -836,7 +832,7 @@ fun DashboardScreen(
                             HubCard(
                                 title = AppStrings.nfcManagement(language),
                                 subtitle = "Card Read & Bind",
-                                icon = Icons.Default.DateRange,
+                                icon = Icons.Default.CheckCircle,
                                 onClick = onNavigateToNfc,
                                 modifier = Modifier.weight(1f)
                             )
@@ -849,7 +845,7 @@ fun DashboardScreen(
                             HubCard(
                                 title = AppStrings.diagnostics(language),
                                 subtitle = "Live Controller Stats",
-                                icon = Icons.Default.Build,
+                                icon = Icons.Default.Settings,
                                 onClick = onNavigateToDiagnostics,
                                 modifier = Modifier.weight(1f)
                             )

@@ -40,7 +40,17 @@ class BleManager(
     var notifyCharacteristic: BluetoothGattCharacteristic? = null
         private set
 
-    private val _isBluetoothEnabled = MutableStateFlow(bluetoothAdapter?.isEnabled == true)
+    fun isBtEnabledSafe(): Boolean {
+        return try {
+            bluetoothAdapter?.isEnabled == true
+        } catch (e: SecurityException) {
+            false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private val _isBluetoothEnabled = MutableStateFlow(false)
     val isBluetoothEnabled: StateFlow<Boolean> = _isBluetoothEnabled.asStateFlow()
 
     private val _connectionStatus = MutableStateFlow(ConnectionStatus.DISCONNECTED)
@@ -83,8 +93,7 @@ class BleManager(
 
     private fun checkAutoReconnect() {
         if (!autoReconnectEnabled || lastTargetAddress == null) return
-        val adapter = bluetoothAdapter
-        if (adapter == null || !adapter.isEnabled) return
+        if (!isBtEnabledSafe()) return
 
         DiagnosticLogger.i("BleManager", "Auto-reconnect active: scheduling reconnect to $lastTargetAddress in 1.8s...")
         reconnectJob?.cancel()
@@ -116,6 +125,11 @@ class BleManager(
 
     init {
         try {
+            _isBluetoothEnabled.value = isBtEnabledSafe()
+        } catch (e: Exception) {
+            _isBluetoothEnabled.value = false
+        }
+        try {
             val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(bluetoothReceiver, filter, Context.RECEIVER_EXPORTED)
@@ -125,6 +139,10 @@ class BleManager(
         } catch (e: Exception) {
             DiagnosticLogger.w("BleManager", "Failed to register Bluetooth state receiver: ${e.message}")
         }
+    }
+
+    fun refreshBluetoothState() {
+        _isBluetoothEnabled.value = isBtEnabledSafe()
     }
 
     private val scanCallback = object : ScanCallback() {
@@ -398,7 +416,7 @@ class BleManager(
             return false
         }
 
-        if (!adapter.isEnabled) {
+        if (!isBtEnabledSafe()) {
             _isBluetoothEnabled.value = false
             _scanError.value = "Bluetooth is turned OFF. Please turn on Bluetooth in settings."
             DiagnosticLogger.w("BleManager", _scanError.value!!)
@@ -474,7 +492,7 @@ class BleManager(
 
     fun connectByAddress(address: String, displayName: String?) {
         val adapter = bluetoothAdapter
-        if (adapter == null || !adapter.isEnabled) {
+        if (adapter == null || !isBtEnabledSafe()) {
             _isBluetoothEnabled.value = false
             DiagnosticLogger.e("BleManager", "Cannot connect: Bluetooth is OFF.")
             return
