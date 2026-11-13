@@ -129,6 +129,7 @@ class ScooterRepositoryImpl(
             SettingCategory.CYCLING_MODE -> current.copy(activeCyclingMode = option as? CyclingMode ?: current.activeCyclingMode)
             SettingCategory.VIBRATION_SENSITIVITY -> current.copy(activeVibrationSensitivity = option as? VibrationSensitivity ?: current.activeVibrationSensitivity)
             SettingCategory.SLOPE_PARKING -> current.copy(activeSlopeParking = (option == SlopeParkingOption.OPEN))
+            else -> current
         }
     }
 
