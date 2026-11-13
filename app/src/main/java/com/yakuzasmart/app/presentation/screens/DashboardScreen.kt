@@ -449,8 +449,9 @@ fun DashboardScreen(
                                             color = OlaTextMuted
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
+                                        val dPct = state.batteryPercent ?: 0
                                         Text(
-                                            text = if (state.isConnected) "${state.batteryPercent}%" else "--",
+                                            text = if (state.isConnected && state.batteryPercent != null) "${state.batteryPercent}%" else "--",
                                             fontSize = 22.sp,
                                             fontWeight = FontWeight.Black,
                                             color = OlaTextPrimary
@@ -465,7 +466,7 @@ fun DashboardScreen(
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .fillMaxWidth(fraction = (state.batteryPercent / 100f).coerceIn(0f, 1f))
+                                                    .fillMaxWidth(fraction = (dPct / 100f).coerceIn(0f, 1f))
                                                     .fillMaxHeight()
                                                     .clip(RoundedCornerShape(3.dp))
                                                     .background(OlaGreenPrimary)
@@ -510,7 +511,7 @@ fun DashboardScreen(
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Row(verticalAlignment = Alignment.Bottom) {
                                             Text(
-                                                text = if (state.isConnected) "${state.estimatedRangeKm}" else "--",
+                                                text = if (state.isConnected && state.estimatedRangeKm != null) "${state.estimatedRangeKm}" else "--",
                                                 fontSize = 22.sp,
                                                 fontWeight = FontWeight.Black,
                                                 color = OlaTextPrimary

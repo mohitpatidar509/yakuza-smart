@@ -34,6 +34,8 @@ class ScooterRepositoryImpl(
     val settingAckEvent = _settingAckEvent.asSharedFlow()
 
     private var isSimulatedMode = false
+    private var authFallbackJob: Job? = null
+    private var keepAliveJob: Job? = null
 
     init {
         // Collect inbound packets from BleManager
@@ -56,9 +58,38 @@ class ScooterRepositoryImpl(
                 if (!isSimulatedMode) {
                     _scooterState.value = _scooterState.value.copy(connectionStatus = status)
                     if (status == ConnectionStatus.CONNECTED_IDLE) {
-                        DiagnosticLogger.i("ScooterRepo", "GATT connected & ready. Sending initial handshake...")
-                        delay(200)
+                        DiagnosticLogger.i("ScooterRepo", "GATT connected & notify ready. Initiating secure session sequence...")
+                        
+                        // Send 0x27 handshake
+                        delay(150)
                         sendHandshake()
+
+                        // Proactive Auth Fallback: If HandshakeAck doesn't fire within 400ms,
+                        // send 0x16 Auth packet to prevent hardware watchdog disconnect!
+                        authFallbackJob?.cancel()
+                        authFallbackJob = scope.launch {
+                            delay(400)
+                            if (_scooterState.value.isConnected) {
+                                DiagnosticLogger.i("ScooterRepo", "Handshake timeout fallback: Dispatching Auth 0x16 frame to prevent hardware watchdog drop...")
+                                val authPacket = BleProtocolHandler.buildAuthPacket()
+                                sendRawPacket(authPacket)
+                            }
+                        }
+
+                        // Periodic Keep-Alive / Watchdog Refresh (Every 2.5s)
+                        keepAliveJob?.cancel()
+                        keepAliveJob = scope.launch {
+                            while (isActive && _scooterState.value.isConnected) {
+                                delay(2500)
+                                if (_scooterState.value.isConnected) {
+                                    DiagnosticLogger.d("ScooterRepo", "Watchdog keep-alive ping (0x27)")
+                                    sendHandshake()
+                                }
+                            }
+                        }
+                    } else if (status == ConnectionStatus.DISCONNECTED) {
+                        authFallbackJob?.cancel()
+                        keepAliveJob?.cancel()
                     }
                 }
             }
@@ -95,8 +126,9 @@ class ScooterRepositoryImpl(
             }
             is ParsedInboundResult.HandshakeAck -> {
                 DiagnosticLogger.i("ScooterRepo", "Handshake established with controller: MAC=${result.macAddress}. Dispatching Auth 0x16 packet...")
+                authFallbackJob?.cancel()
                 scope.launch {
-                    delay(100)
+                    delay(50)
                     val authPacket = BleProtocolHandler.buildAuthPacket(result.boundMobileBytes)
                     sendRawPacket(authPacket)
                 }
@@ -176,6 +208,11 @@ class ScooterRepositoryImpl(
     }
 
     override suspend fun disconnect() {
+        authFallbackJob?.cancel()
+        authFallbackJob = null
+        keepAliveJob?.cancel()
+        keepAliveJob = null
+
         if (isSimulatedMode) {
             bleSimulator.stopTelemetryLoop()
             _scooterState.value = ScooterState(

@@ -60,6 +60,9 @@ class BleManager(
 
     private val writeQueue = ConcurrentLinkedQueue<ByteArray>()
     private var isWriting = false
+    private var negotiatedMtu: Int = 23
+    private var mtuTimeoutJob: Job? = null
+    private var descriptorTimeoutJob: Job? = null
 
     private var autoReconnectEnabled = false
     private var lastTargetAddress: String? = null
@@ -184,15 +187,33 @@ class BleManager(
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     _connectionStatus.value = ConnectionStatus.DISCOVERING_SERVICES
-                    DiagnosticLogger.i("BleManager", "Connected to GATT server. Optimizing connection priority & discovering services...")
-                    try {
-                        gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                        scope.launch {
-                            delay(150)
+                    DiagnosticLogger.i("BleManager", "Connected to GATT server. Negotiating MTU 512 for unsliced authentication & telemetry...")
+                    
+                    mtuTimeoutJob?.cancel()
+                    mtuTimeoutJob = scope.launch {
+                        delay(600)
+                        DiagnosticLogger.w("BleManager", "MTU negotiation callback timed out. Falling back to discovering services...")
+                        try {
+                            gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                             gatt?.discoverServices()
+                        } catch (e: Exception) {
+                            DiagnosticLogger.e("BleManager", "Fallback discoverServices error: ${e.message}")
+                        }
+                    }
+
+                    try {
+                        val requested = gatt?.requestMtu(512) ?: false
+                        if (!requested) {
+                            DiagnosticLogger.w("BleManager", "requestMtu returned false immediately. Initiating direct service discovery...")
+                            mtuTimeoutJob?.cancel()
+                            scope.launch {
+                                delay(150)
+                                gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                                gatt?.discoverServices()
+                            }
                         }
                     } catch (e: Exception) {
-                        DiagnosticLogger.e("BleManager", "Error discovering services: ${e.message}")
+                        DiagnosticLogger.e("BleManager", "Exception requesting MTU: ${e.message}")
                     }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -205,7 +226,20 @@ class BleManager(
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
-            DiagnosticLogger.i("BleManager", "MTU changed to $mtu (status=$status)")
+            DiagnosticLogger.i("BleManager", "MTU negotiated: mtu=$mtu, status=$status")
+            mtuTimeoutJob?.cancel()
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                negotiatedMtu = mtu
+            }
+            try {
+                gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                scope.launch {
+                    delay(120)
+                    gatt?.discoverServices()
+                }
+            } catch (e: Exception) {
+                DiagnosticLogger.e("BleManager", "Error discovering services post-MTU: ${e.message}")
+            }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
@@ -247,7 +281,6 @@ class BleManager(
                 // 2. Dynamic Fallback: If not found in known UUID table, pick first writable & notifiable characteristic!
                 if (foundWrite == null || foundNotify == null) {
                     for (service in gatt.services) {
-                        // Skip standard generic access/attribute profiles (0x1800, 0x1801)
                         val sStr = service.uuid.toString()
                         if (sStr.startsWith("00001800") || sStr.startsWith("00001801")) continue
 
@@ -280,15 +313,33 @@ class BleManager(
                 }
 
                 if (notifyCharacteristic != null) {
+                    descriptorTimeoutJob?.cancel()
+                    descriptorTimeoutJob = scope.launch {
+                        delay(600)
+                        DiagnosticLogger.w("BleManager", "Descriptor write timeout fallback: Transitioning to CONNECTED_IDLE.")
+                        _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
+                    }
                     enableNotifications(gatt, notifyCharacteristic!!)
-                    DiagnosticLogger.i("BleManager", "SUCCESS: Selected Notify Pipe: ${notifyCharacteristic!!.uuid}")
+                    DiagnosticLogger.i("BleManager", "Subscribed to Notify Pipe: ${notifyCharacteristic!!.uuid}, awaiting descriptor confirmation...")
                 } else {
                     DiagnosticLogger.w("BleManager", "No notify characteristic found.")
+                    _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
                 }
-
-                _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
             } catch (e: Exception) {
                 DiagnosticLogger.e("BleManager", "Error in onServicesDiscovered: ${e.message}")
+                _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
+            }
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt?,
+            descriptor: BluetoothGattDescriptor?,
+            status: Int
+        ) {
+            DiagnosticLogger.i("BleManager", "onDescriptorWrite confirmed for ${descriptor?.characteristic?.uuid}, status=$status")
+            descriptorTimeoutJob?.cancel()
+            scope.launch {
+                delay(80)
                 _connectionStatus.value = ConnectionStatus.CONNECTED_IDLE
             }
         }
@@ -493,10 +544,11 @@ class BleManager(
     }
 
     fun writePacket(packet: ByteArray) {
-        if (packet.size > 20) {
+        val maxPayload = if (negotiatedMtu > 23) (negotiatedMtu - 3) else 20
+        if (packet.size > maxPayload) {
             var offset = 0
             while (offset < packet.size) {
-                val chunkSize = minOf(20, packet.size - offset)
+                val chunkSize = minOf(maxPayload, packet.size - offset)
                 val chunk = packet.copyOfRange(offset, offset + chunkSize)
                 writeQueue.add(chunk)
                 offset += chunkSize
@@ -525,7 +577,7 @@ class BleManager(
         val packet = writeQueue.poll() ?: return
         isWriting = true
 
-        DiagnosticLogger.tx("BleManager", "Dispatching to ${char.uuid} (Type=${char.writeType})", packet)
+        DiagnosticLogger.tx("BleManager", "Dispatching to ${char.uuid} (Type=${char.writeType}, Size=${packet.size}B)", packet)
 
         try {
             val isNoResponse = (char.writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
@@ -555,6 +607,9 @@ class BleManager(
     }
 
     private fun releaseGatt() {
+        mtuTimeoutJob?.cancel()
+        descriptorTimeoutJob?.cancel()
+        negotiatedMtu = 23
         try {
             activeGatt?.close()
         } catch (e: Exception) {

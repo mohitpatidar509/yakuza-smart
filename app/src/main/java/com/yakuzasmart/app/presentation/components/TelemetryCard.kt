@@ -105,7 +105,7 @@ fun TelemetryCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (state.isConnected) "${state.batteryPercent}%" else "--",
+                            text = if (state.isConnected && state.batteryPercent != null) "${state.batteryPercent}%" else "--",
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Black,
                             color = if (state.isConnected) OlaTextPrimary else OlaTextMuted
@@ -114,6 +114,7 @@ fun TelemetryCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // Horizontal Battery Indicator Pill
+                    val batPct = state.batteryPercent ?: 0
                     Box(
                         modifier = Modifier
                             .width(80.dp)
@@ -123,11 +124,11 @@ fun TelemetryCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(fraction = (state.batteryPercent / 100f).coerceIn(0f, 1f))
+                                .fillMaxWidth(fraction = (batPct / 100f).coerceIn(0f, 1f))
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(
-                                    if (state.batteryPercent > 20) OlaGreenPrimary else OlaStatusDisconnected
+                                    if (batPct > 20) OlaGreenPrimary else OlaStatusDisconnected
                                 )
                         )
                     }
@@ -150,7 +151,7 @@ fun TelemetryCard(
             ) {
                 MetricColumn(
                     label = AppStrings.estimatedRange(language),
-                    value = if (state.isConnected) "${state.estimatedRangeKm} km" else "--"
+                    value = if (state.isConnected && state.estimatedRangeKm != null) "${state.estimatedRangeKm} km" else "--"
                 )
                 MetricColumn(
                     label = AppStrings.totalMileage(language),

@@ -86,6 +86,16 @@ object AppStrings {
         Language.HINDI -> "अनुमानित रेंज"
     }
 
+    fun totalMileage(lang: Language): String = when (lang) {
+        Language.ENGLISH -> "Total Mileage"
+        Language.HINDI -> "कुल दूरी (ओडो)"
+    }
+
+    fun batteryVoltage(lang: Language): String = when (lang) {
+        Language.ENGLISH -> "Battery Voltage"
+        Language.HINDI -> "बैटरी वोल्टेज"
+    }
+
     fun voltage(lang: Language): String = when (lang) {
         Language.ENGLISH -> "Voltage"
         Language.HINDI -> "वोल्टेज"
