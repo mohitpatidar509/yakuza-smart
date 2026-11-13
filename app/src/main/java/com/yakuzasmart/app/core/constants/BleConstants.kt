@@ -23,9 +23,12 @@ object BleConstants {
     const val SYNC_BYTE_1: Byte = 0x01.toByte()
     const val CMD_TYPE: Byte = 0x00.toByte()
     const val CMD_GROUP_CONTROL: Byte = 0x01.toByte()
+    const val CMD_GROUP_ACK: Byte = 0x02.toByte()
     const val CMD_GROUP_NOTIFY: Byte = 0x06.toByte()
 
     // Scooter Remote Controls (Authentic Opcodes from Yakuza/Tiannian Controller)
+    const val OPCODE_AUTH_INFO: Byte = 0x16.toByte()    // Security Authentication handshake
+    const val OPCODE_QUERY_INFO: Byte = 0x17.toByte()   // Query bound info
     const val OPCODE_IGNITION: Byte = 0x1B.toByte()    // Start (0x01) / Stop (0x00)
     const val OPCODE_ALERT_LOCK: Byte = 0x1C.toByte()  // Anti-Theft Lock (0x01) / Unlock (0x00)
     const val OPCODE_WHISTLE_FIND: Byte = 0x25.toByte()// Horn / Find Scooter (0x01)
@@ -63,6 +66,20 @@ object BleConstants {
 
     // Legacy compatibility opcodes
     const val OPCODE_QUERY_STATUS: Byte = 0x01.toByte()
+
+    // Authentic Security Constants for Handshake & Auth (Opcode 0x16)
+    val AUTH_AES_KEY: ByteArray = byteArrayOf(
+        0x11, 0x12, 0x13, 0x14,
+        0x11, 0x12, 0x13, 0x14,
+        0x11, 0x12, 0x13, 0x14,
+        0x11, 0x12, 0x13, 0x14
+    )
+    val AUTH_SALT: ByteArray = byteArrayOf(
+        0x0b.toByte(), 0xf2.toByte(), 0xda.toByte(), 0x3e.toByte(),
+        0xef.toByte(), 0xf4.toByte(), 0xef.toByte(), 0x82.toByte(),
+        0x34.toByte(), 0x03.toByte(), 0xb9.toByte(), 0x97.toByte(),
+        0xfa.toByte(), 0x2b.toByte(), 0x5c.toByte(), 0x52.toByte()
+    )
 
     // Timeouts and Limits
     const val SCAN_TIMEOUT_MS = 15_000L

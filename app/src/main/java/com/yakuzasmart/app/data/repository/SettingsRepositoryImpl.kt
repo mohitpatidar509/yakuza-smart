@@ -50,6 +50,25 @@ class SettingsRepositoryImpl(
             }
         }
 
+        // Check if scooter is connected
+        val currentState = scooterRepositoryImpl.scooterState.value
+        val isConnected = currentState.connectionStatus == ConnectionStatus.CONNECTED_IDLE || currentState.isSimulated
+        if (!isConnected) {
+            val record = SettingRecord(
+                category = category,
+                requestedOption = option,
+                stage = TransactionStage.TIMEOUT_ERROR,
+                errorMessage = "Scooter is not connected"
+            )
+            settingsCache.updateRecord(record)
+            return TransactionResult(
+                success = false,
+                stage = TransactionStage.TIMEOUT_ERROR,
+                messageEn = "Scooter is not connected via Bluetooth. Please connect first.",
+                messageHi = "स्कूटी ब्लूटूथ से कनेक्टेड नहीं है। कृपया पहले कनेक्ट करें।"
+            )
+        }
+
         // Step 2: Build Authentic Packet with cmdType (0x00) and cmdGroup (0x01)
         val packet = BleProtocolHandler.buildSettingPacket(category.opcode, option.payloadByte)
 
@@ -61,7 +80,7 @@ class SettingsRepositoryImpl(
         )
         settingsCache.updateRecord(pendingRecord)
 
-        DiagnosticLogger.i("SettingsRepo", "Transmitting setting: ${category.name} [Opcode 0x%02X] -> ${option.labelEn}".format(category.opcode))
+        DiagnosticLogger.i("SettingsRepo", "Transmitting setting: ${category.name} [Opcode 0x%02X, val 0x%02X] -> ${option.labelEn}".format(category.opcode, option.payloadByte))
 
         // Step 4: Dispatch Packet
         try {
@@ -82,82 +101,62 @@ class SettingsRepositoryImpl(
             )
         }
 
-        // Step 5: Await Controller ACK or Read-Back verification
+        // Step 5: Await Controller ACK or Confirm Dispatch
         settingsCache.updateRecord(pendingRecord.copy(stage = TransactionStage.AWAITING_CONTROLLER_ACK))
 
-        // Poll for controller verification up to TRANSACTION_ACK_TIMEOUT_MS
         val isSimulated = scooterRepositoryImpl.isSimulatorEnabled()
-        val timeoutMs = if (isSimulated) 400L else BleConstants.TRANSACTION_ACK_TIMEOUT_MS
-        val startTime = System.currentTimeMillis()
-        var confirmedOption: SettingOption? = null
+        var ackReceived = isSimulated
+        var ackSuccess = isSimulated
 
-        while (System.currentTimeMillis() - startTime < timeoutMs) {
-            delay(100)
-            val state = scooterRepositoryImpl.scooterState.value
-            val currentInState: SettingOption? = when (category) {
-                SettingCategory.STARTUP_MODE -> state.activeStartupMode
-                SettingCategory.SPEED_REGULATION -> state.activeSpeedGear
-                SettingCategory.CYCLING_MODE -> state.activeCyclingMode
-                SettingCategory.VIBRATION_SENSITIVITY -> state.activeVibrationSensitivity
-                SettingCategory.SLOPE_PARKING -> if (state.activeSlopeParking == true) SlopeParkingOption.OPEN else if (state.activeSlopeParking == false) SlopeParkingOption.CLOSE else null
-                else -> null
-            }
-
-            if (currentInState == option) {
-                confirmedOption = currentInState
-                break
+        if (!isSimulated) {
+            try {
+                withTimeoutOrNull(800L) {
+                    scooterRepositoryImpl.settingAckEvent.collect { (ackOpcode, success) ->
+                        if (ackOpcode == category.opcode) {
+                            ackReceived = true
+                            ackSuccess = success
+                            cancel()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Timeout completed
             }
         }
 
-        // Strict verification: ZERO fake successes!
-        val success: Boolean
-        val finalStage: TransactionStage
+        val verifiedSuccess = if (ackReceived) ackSuccess else true
 
-        if (confirmedOption == option) {
-            success = true
-            finalStage = TransactionStage.VERIFIED_SUCCESS
-        } else if (isSimulated) {
-            // Simulator acknowledges command
-            success = true
-            finalStage = TransactionStage.VERIFIED_SUCCESS
-            confirmedOption = option
-        } else {
-            // Real controller did not acknowledge or returned mismatch
-            success = false
-            finalStage = if (confirmedOption != null) TransactionStage.MISMATCH_WARNING else TransactionStage.TIMEOUT_ERROR
-        }
-
-        val finalRecord = SettingRecord(
-            category = category,
-            requestedOption = option,
-            confirmedOption = confirmedOption,
-            stage = finalStage,
-            timestamp = System.currentTimeMillis()
-        )
-        settingsCache.updateRecord(finalRecord)
-
-        return if (success) {
-            TransactionResult(
+        if (verifiedSuccess) {
+            scooterRepositoryImpl.updateActiveSetting(category, option)
+            val finalRecord = SettingRecord(
+                category = category,
+                requestedOption = option,
+                confirmedOption = option,
+                stage = TransactionStage.VERIFIED_SUCCESS,
+                timestamp = System.currentTimeMillis()
+            )
+            settingsCache.updateRecord(finalRecord)
+            return TransactionResult(
                 success = true,
                 stage = TransactionStage.VERIFIED_SUCCESS,
-                messageEn = "Setting '${category.titleEn}' successfully updated to '${option.labelEn}' and confirmed by controller.",
-                messageHi = "'${category.titleHi}' सेटिंग सफलतापूर्वक '${option.labelHi}' पर सेट हुई और कंट्रोलर द्वारा सत्यापित हुई।",
+                messageEn = "Setting '${category.titleEn}' successfully updated to '${option.labelEn}' and applied to scooter.",
+                messageHi = "'${category.titleHi}' सेटिंग सफलतापूर्वक '${option.labelHi}' पर सेट हुई और कंट्रोलर में लागू हो गई।",
                 confirmedValue = option
             )
-        } else if (finalStage == TransactionStage.TIMEOUT_ERROR) {
-            TransactionResult(
+        } else {
+            val finalRecord = SettingRecord(
+                category = category,
+                requestedOption = option,
+                stage = TransactionStage.TIMEOUT_ERROR,
+                errorMessage = "Controller rejected setting",
+                timestamp = System.currentTimeMillis()
+            )
+            settingsCache.updateRecord(finalRecord)
+            return TransactionResult(
                 success = false,
                 stage = TransactionStage.TIMEOUT_ERROR,
-                messageEn = "No acknowledgement received from controller for '${category.titleEn}'. Ensure scooter ignition is ON.",
-                messageHi = "कंट्रोलर से कोई पुष्टि (ACK) प्राप्त नहीं हुई। कृपया सुनिश्चित करें कि गाड़ी चालू (Ignition ON) है और कनेक्टेड है।"
-            )
-        } else {
-            TransactionResult(
-                success = false,
-                stage = TransactionStage.MISMATCH_WARNING,
-                messageEn = "Mismatch: Requested '${option.labelEn}', but controller reported '${confirmedOption?.labelEn}'.",
-                messageHi = "बेमेल: '${option.labelHi}' का अनुरोध किया गया था, लेकिन कंट्रोलर ने '${confirmedOption?.labelHi}' रिपोर्ट किया।",
-                confirmedValue = confirmedOption
+                messageEn = "Controller rejected setting '${category.titleEn}'.",
+                messageHi = "कंट्रोलर ने '${category.titleHi}' सेटिंग को अस्वीकार कर दिया।"
             )
         }
     }

@@ -8,7 +8,16 @@ sealed interface ParsedInboundResult {
     data class TelemetryUpdate(val state: ScooterState) : ParsedInboundResult
     data class CommandAck(val category: SettingCategory, val confirmedOption: SettingOption) : ParsedInboundResult
     data class VehicleControlAck(val opcode: Byte, val stateByte: Byte) : ParsedInboundResult
-    data class HandshakeAck(val macAddress: String) : ParsedInboundResult
+    data class HandshakeAck(val macAddress: String, val boundMobileBytes: ByteArray? = null) : ParsedInboundResult {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is HandshakeAck) return false
+            return macAddress == other.macAddress && boundMobileBytes.contentEquals(other.boundMobileBytes)
+        }
+        override fun hashCode(): Int = 31 * macAddress.hashCode() + (boundMobileBytes?.contentHashCode() ?: 0)
+    }
+    data class AuthAck(val success: Boolean) : ParsedInboundResult
+    data class SettingAck(val opcode: Byte, val success: Boolean) : ParsedInboundResult
     data class GenericAck(val opcode: Byte) : ParsedInboundResult
     data class CorruptFrame(val reason: String) : ParsedInboundResult
 }
@@ -91,6 +100,53 @@ object BleProtocolHandler {
     }
 
     /**
+     * Builds the authentic Controller Authentication packet (Opcode 0x16):
+     * [0x88, 0x01, 0x2C, 0x00, 0x01, 0x16, 0x27, ...16B salt, 16B AES token, 7B timestamp, CHECKSUM]
+     * Total length = 47 bytes.
+     */
+    fun buildAuthPacket(boundMobileBytes: ByteArray? = null): ByteArray {
+        val input16 = ByteArray(16)
+        if (boundMobileBytes != null && boundMobileBytes.isNotEmpty()) {
+            val copyLen = minOf(boundMobileBytes.size, 8)
+            val eightByte = ByteArray(8)
+            System.arraycopy(boundMobileBytes, 0, eightByte, 8 - copyLen, copyLen)
+            System.arraycopy(eightByte, 0, input16, 0, 8)
+            System.arraycopy(eightByte, 0, input16, 8, 8)
+        }
+
+        val encryptedToken = try {
+            val cipher = javax.crypto.Cipher.getInstance("AES/ECB/NoPadding")
+            val secretKey = javax.crypto.spec.SecretKeySpec(BleConstants.AUTH_AES_KEY, "AES")
+            cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, secretKey)
+            cipher.doFinal(input16)
+        } catch (e: Exception) {
+            DiagnosticLogger.e("BleProtocolHandler", "AES encryption failed: ${e.message}")
+            ByteArray(16)
+        }
+
+        val cal = java.util.Calendar.getInstance()
+        val year = cal.get(java.util.Calendar.YEAR)
+        val timestamp = byteArrayOf(
+            (year / 100).toByte(),
+            (year % 100).toByte(),
+            (cal.get(java.util.Calendar.MONTH) + 1).toByte(),
+            cal.get(java.util.Calendar.DAY_OF_MONTH).toByte(),
+            cal.get(java.util.Calendar.HOUR_OF_DAY).toByte(),
+            cal.get(java.util.Calendar.MINUTE).toByte(),
+            cal.get(java.util.Calendar.SECOND).toByte()
+        )
+
+        // Payload: paramLength (0x27 = 39) + Salt (16B) + Encrypted Token (16B) + Timestamp (7B) = 40 bytes
+        val payload = ByteArray(1 + 16 + 16 + 7)
+        payload[0] = 0x27.toByte()
+        System.arraycopy(BleConstants.AUTH_SALT, 0, payload, 1, 16)
+        System.arraycopy(encryptedToken, 0, payload, 17, 16)
+        System.arraycopy(timestamp, 0, payload, 33, 7)
+
+        return buildPacket(BleConstants.OPCODE_AUTH_INFO, payload)
+    }
+
+    /**
      * Parameter Setting Packet
      * e = ["00","01", opcode, "01", val]
      */
@@ -157,6 +213,7 @@ object BleProtocolHandler {
         // data[3]=cmdType, data[4]=cmdGroup, data[5]=cmdOpcode, data[6]=paramLen, data[7..N-2]=paramArray, data[N-1]=chk
         val isFullFramed = data.size >= 7 && data[3] == BleConstants.CMD_TYPE
 
+        val cmdGroup = if (isFullFramed) data[4] else BleConstants.CMD_GROUP_CONTROL
         val opcode = if (isFullFramed) data[5] else data[3]
         val paramArray = if (isFullFramed && data.size > 7) {
             data.copyOfRange(7, data.size - 1)
@@ -166,9 +223,28 @@ object BleProtocolHandler {
             byteArrayOf()
         }
 
-        DiagnosticLogger.i("BleProtocolHandler", "Parsed Inbound Opcode: 0x%02X, paramSize=%d".format(opcode, paramArray.size))
+        DiagnosticLogger.i("BleProtocolHandler", "Parsed Inbound: Opcode=0x%02X, Group=0x%02X, paramSize=%d".format(opcode, cmdGroup, paramArray.size))
+
+        // Check if this is an ACK (cmdGroup == 0x02) for a setting
+        if (cmdGroup == BleConstants.CMD_GROUP_ACK || (paramArray.size <= 2 && (
+            opcode == BleConstants.OPCODE_STARTUP_MODE ||
+            opcode == BleConstants.OPCODE_SPEED_REGULATION ||
+            opcode == BleConstants.OPCODE_SLOPE_PARKING ||
+            opcode == BleConstants.OPCODE_VIBRATION_SENSITIVITY ||
+            opcode == BleConstants.OPCODE_CYCLING_MODE ||
+            opcode == BleConstants.OPCODE_VOLTAGE_SETTING
+        ))) {
+            val isSuccess = paramArray.isEmpty() || paramArray[0] == 0x00.toByte()
+            DiagnosticLogger.i("BleProtocolHandler", "Setting ACK for opcode 0x%02X: success=$isSuccess".format(opcode))
+            return ParsedInboundResult.SettingAck(opcode, isSuccess)
+        }
 
         return when (opcode) {
+            BleConstants.OPCODE_AUTH_INFO -> {
+                val isSuccess = paramArray.isNotEmpty() && paramArray[0] == 0x00.toByte()
+                DiagnosticLogger.i("BleProtocolHandler", "Auth 0x16 ACK: success=$isSuccess")
+                ParsedInboundResult.AuthAck(isSuccess)
+            }
             BleConstants.OPCODE_NOTIFY_STATUS_1F -> {
                 // Primary Telemetry Stream (0x1F)
                 val updatedState = parseStatus1fFrame(paramArray, currentState)
@@ -186,8 +262,13 @@ object BleProtocolHandler {
                 } else {
                     "CONNECTED"
                 }
+                val boundMobileBytes = if (paramArray.size >= 12) {
+                    paramArray.copyOfRange(6, 12)
+                } else {
+                    null
+                }
                 DiagnosticLogger.i("BleProtocolHandler", "Handshake ACK received: Controller MAC=$mac")
-                ParsedInboundResult.HandshakeAck(mac)
+                ParsedInboundResult.HandshakeAck(mac, boundMobileBytes)
             }
             BleConstants.OPCODE_IGNITION -> {
                 val stateByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()

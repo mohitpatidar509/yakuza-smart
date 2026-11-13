@@ -84,6 +84,11 @@ class BleSimulator(
                 val ack = BleProtocolHandler.buildPacket(BleConstants.OPCODE_HANDSHAKE, macPayload, cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
                 _inboundPackets.emit(ack)
             }
+            BleConstants.OPCODE_AUTH_INFO -> {
+                DiagnosticLogger.i("BleSimulator", "Virtual Controller Authenticated with 0x16 Auth packet! Security timer reset.")
+                val ack = BleProtocolHandler.buildPacket(BleConstants.OPCODE_AUTH_INFO, byteArrayOf(0x01.toByte(), 0x00.toByte()), cmdGroup = BleConstants.CMD_GROUP_ACK)
+                _inboundPackets.emit(ack)
+            }
             BleConstants.OPCODE_IGNITION -> {
                 val isStart = if (paramArray.isNotEmpty()) paramArray[0] == 0x01.toByte() else false
                 ramIgnition = isStart
@@ -110,35 +115,35 @@ class BleSimulator(
                 val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramStartupMode = if (valByte == 0x01.toByte()) StartupMode.HARD_BOOT else StartupMode.SOFT_START
                 DiagnosticLogger.i("BleSimulator", "SRAM updated: StartupMode = $ramStartupMode")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01.toByte(), 0x00.toByte()), cmdGroup = BleConstants.CMD_GROUP_ACK)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_SPEED_REGULATION -> {
                 val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramSpeedGear = SpeedRegulationOption.entries.find { it.payloadByte == valByte } ?: SpeedRegulationOption.SPEED_0
                 DiagnosticLogger.i("BleSimulator", "SRAM updated: SpeedGear = $ramSpeedGear")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01.toByte(), 0x00.toByte()), cmdGroup = BleConstants.CMD_GROUP_ACK)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_VIBRATION_SENSITIVITY -> {
                 val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x01.toByte()
                 ramVibration = VibrationSensitivity.entries.find { it.payloadByte == valByte } ?: VibrationSensitivity.MEDIUM
                 DiagnosticLogger.i("BleSimulator", "SRAM updated: Vibration = $ramVibration")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01.toByte(), 0x00.toByte()), cmdGroup = BleConstants.CMD_GROUP_ACK)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_CYCLING_MODE -> {
                 val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramCyclingMode = CyclingMode.entries.find { it.payloadByte == valByte } ?: CyclingMode.COMFORT
                 DiagnosticLogger.i("BleSimulator", "SRAM updated: CyclingMode = $ramCyclingMode")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01.toByte(), 0x00.toByte()), cmdGroup = BleConstants.CMD_GROUP_ACK)
                 _inboundPackets.emit(ack)
             }
             BleConstants.OPCODE_SLOPE_PARKING -> {
                 val valByte = if (paramArray.isNotEmpty()) paramArray[0] else 0x00.toByte()
                 ramSlopeParking = SlopeParkingOption.entries.find { it.payloadByte == valByte } ?: SlopeParkingOption.CLOSE
                 DiagnosticLogger.i("BleSimulator", "SRAM updated: SlopeParking = $ramSlopeParking")
-                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(valByte), cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
+                val ack = BleProtocolHandler.buildPacket(opcode, byteArrayOf(0x01.toByte(), 0x00.toByte()), cmdGroup = BleConstants.CMD_GROUP_ACK)
                 _inboundPackets.emit(ack)
             }
             else -> {

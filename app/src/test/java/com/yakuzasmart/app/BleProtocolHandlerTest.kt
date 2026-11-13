@@ -17,16 +17,31 @@ class BleProtocolHandlerTest {
             byteArrayOf(StartupMode.HARD_BOOT.payloadByte)
         )
 
-        // Expected: [0x88, 0x01, LEN(4), 0x3E, 0x01, CHECKSUM]
+        // Expected: [0x88, 0x01, LEN(5), CMD_TYPE(0), CMD_GRP(1), OPCODE(0x3E), VAL(0x01), CHECKSUM]
         assertEquals(BleConstants.SYNC_BYTE_0, packet[0])
         assertEquals(BleConstants.SYNC_BYTE_1, packet[1])
-        assertEquals(4.toByte(), packet[2]) // len: payload + 3
-        assertEquals(BleConstants.OPCODE_STARTUP_MODE, packet[3])
-        assertEquals(0x01.toByte(), packet[4])
+        assertEquals(5.toByte(), packet[2]) // len: payload(1) + 4
+        assertEquals(BleConstants.CMD_TYPE, packet[3])
+        assertEquals(BleConstants.CMD_GROUP_CONTROL, packet[4])
+        assertEquals(BleConstants.OPCODE_STARTUP_MODE, packet[5])
+        assertEquals(0x01.toByte(), packet[6])
+        assertTrue(BleProtocolHandler.validateFrame(packet))
+    }
 
-        // Verify checksum
-        val expectedSum = ((0x88 and 0xFF) + (0x01 and 0xFF) + 4 + (0x3E and 0xFF) + 1) and 0xFF
-        assertEquals(expectedSum.toByte(), packet[5])
+    @Test
+    fun testBuildAuthPacket() {
+        val authPacket = BleProtocolHandler.buildAuthPacket(byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x06))
+
+        // Total 47 bytes: 88 01 2C 00 01 16 27 [16B salt] [16B token] [7B timestamp] CHK
+        assertEquals(47, authPacket.size)
+        assertEquals(BleConstants.SYNC_BYTE_0, authPacket[0])
+        assertEquals(BleConstants.SYNC_BYTE_1, authPacket[1])
+        assertEquals(0x2C.toByte(), authPacket[2]) // 44 bytes length
+        assertEquals(BleConstants.CMD_TYPE, authPacket[3])
+        assertEquals(BleConstants.CMD_GROUP_CONTROL, authPacket[4])
+        assertEquals(BleConstants.OPCODE_AUTH_INFO, authPacket[5])
+        assertEquals(0x27.toByte(), authPacket[6]) // param length = 39
+        assertTrue(BleProtocolHandler.validateFrame(authPacket))
     }
 
     @Test
@@ -53,48 +68,30 @@ class BleProtocolHandlerTest {
     }
 
     @Test
-    fun testParseInboundTelemetryFrame() {
-        // Build 16-byte telemetry frame
-        // [0x88, 0x01, LEN(0x10), OPCODE(0x01), SpdHi(0x01), SpdLo(0x2C) -> 300 = 30.0km/h,
-        //  BatSoc(82%), VoltHi(0x02), VoltLo(0x58) -> 600 = 60.0V, Curr(50 = 5.0A),
-        //  Temp(72 -> 32 C), Faults(0x01 -> Kickstand), StartMode(0x01 -> Hard), Gear(0x02 -> 25), Cycle(0x03 -> Racing), CHK]
-        val payload = byteArrayOf(
-            0x01.toByte(), 0x2C.toByte(), // 30.0 km/h
-            82.toByte(),                  // 82%
-            0x02.toByte(), 0x58.toByte(), // 60.0 V
-            50.toByte(),                  // 5.0 A
-            72.toByte(),                  // 32 C (72 - 40)
-            0x01.toByte(),                // Kickstand down
-            0x01.toByte(),                // Hard Boot
-            0x02.toByte(),                // 25 km/h gear
-            0x03.toByte()                 // Racing mode
-        )
+    fun testParseInboundHandshakeAck() {
+        // Handshake packet from controller: [88, 01, LEN, 00, 06, 27, 0C, MAC(6B), BIND(6B), CHK]
+        val macBytes = byteArrayOf(0xAA.toByte(), 0xBB.toByte(), 0xCC.toByte(), 0xDD.toByte(), 0xEE.toByte(), 0xFF.toByte())
+        val bindBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x06)
+        val payload = byteArrayOf(0x0C.toByte()) + macBytes + bindBytes
+        val packet = BleProtocolHandler.buildPacket(BleConstants.OPCODE_HANDSHAKE, payload, cmdGroup = BleConstants.CMD_GROUP_NOTIFY)
 
-        val packet = BleProtocolHandler.buildPacket(BleConstants.OPCODE_QUERY_STATUS, payload)
-        val initial = ScooterState()
-        val result = BleProtocolHandler.parseInboundPacket(packet, initial)
-
-        assertTrue(result is ParsedInboundResult.TelemetryUpdate)
-        val state = (result as ParsedInboundResult.TelemetryUpdate).state
-        assertEquals(30.0f, state.speedKmh ?: 0.0f, 0.01f)
-        assertEquals(82, state.batteryPercent)
-        assertEquals(60.0f, state.batteryVoltageVolts ?: 0.0f, 0.01f)
-        assertEquals(5.0f, state.motorCurrentAmps ?: 0.0f, 0.01f)
-        assertEquals(32, state.controllerTempCelsius)
-        assertTrue(state.faults.kickstandDown)
-        assertFalse(state.faults.brakeEngaged)
-        assertEquals(StartupMode.HARD_BOOT, state.activeStartupMode)
+        val result = BleProtocolHandler.parseInboundPacket(packet, ScooterState())
+        assertTrue(result is ParsedInboundResult.HandshakeAck)
+        val hs = result as ParsedInboundResult.HandshakeAck
+        assertEquals("AA:BB:CC:DD:EE:FF", hs.macAddress)
+        assertArrayEquals(bindBytes, hs.boundMobileBytes)
     }
 
     @Test
-    fun testParseCommandAck() {
-        val ackPacket = BleProtocolHandler.buildPacket(
-            BleConstants.OPCODE_STARTUP_MODE,
-            byteArrayOf(0x01.toByte())
-        )
-        val result = BleProtocolHandler.parseInboundPacket(ackPacket, ScooterState())
-        assertTrue(result is ParsedInboundResult.CommandAck)
-        val cmdAck = result as ParsedInboundResult.CommandAck
-        assertEquals(StartupMode.HARD_BOOT, cmdAck.confirmedOption)
+    fun testParseSettingAck() {
+        // Setting ACK from controller: [88, 01, LEN, 00, 02, 3E, 01, 00, CHK]
+        val payload = byteArrayOf(0x01.toByte(), 0x00.toByte()) // 0x00 = success
+        val packet = BleProtocolHandler.buildPacket(BleConstants.OPCODE_STARTUP_MODE, payload, cmdGroup = BleConstants.CMD_GROUP_ACK)
+
+        val result = BleProtocolHandler.parseInboundPacket(packet, ScooterState())
+        assertTrue(result is ParsedInboundResult.SettingAck)
+        val ack = result as ParsedInboundResult.SettingAck
+        assertEquals(BleConstants.OPCODE_STARTUP_MODE, ack.opcode)
+        assertTrue(ack.success)
     }
 }

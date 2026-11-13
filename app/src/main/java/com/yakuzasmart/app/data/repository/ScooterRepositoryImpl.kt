@@ -30,6 +30,9 @@ class ScooterRepositoryImpl(
     private val _savedScooter = MutableStateFlow<BleDeviceItem?>(null)
     override val savedScooter: StateFlow<BleDeviceItem?> = _savedScooter.asStateFlow()
 
+    private val _settingAckEvent = MutableSharedFlow<Pair<Byte, Boolean>>(extraBufferCapacity = 10)
+    val settingAckEvent = _settingAckEvent.asSharedFlow()
+
     private var isSimulatedMode = false
 
     init {
@@ -91,7 +94,23 @@ class ScooterRepositoryImpl(
                 DiagnosticLogger.i("ScooterRepo", "Vehicle Control ACK for opcode 0x%02X".format(result.opcode))
             }
             is ParsedInboundResult.HandshakeAck -> {
-                DiagnosticLogger.i("ScooterRepo", "Handshake established with controller: MAC=${result.macAddress}")
+                DiagnosticLogger.i("ScooterRepo", "Handshake established with controller: MAC=${result.macAddress}. Dispatching Auth 0x16 packet...")
+                scope.launch {
+                    delay(100)
+                    val authPacket = BleProtocolHandler.buildAuthPacket(result.boundMobileBytes)
+                    sendRawPacket(authPacket)
+                }
+            }
+            is ParsedInboundResult.AuthAck -> {
+                if (result.success) {
+                    DiagnosticLogger.i("ScooterRepo", "CONTROLLER AUTHENTICATED SUCCESSFULLY! Connection persistent.")
+                } else {
+                    DiagnosticLogger.w("ScooterRepo", "Controller auth response non-zero, continuing session.")
+                }
+            }
+            is ParsedInboundResult.SettingAck -> {
+                DiagnosticLogger.i("ScooterRepo", "Setting ACK: opcode 0x%02X, success=${result.success}".format(result.opcode))
+                _settingAckEvent.tryEmit(Pair(result.opcode, result.success))
             }
             is ParsedInboundResult.GenericAck -> {
                 DiagnosticLogger.i("ScooterRepo", "Received generic ACK opcode 0x%02X".format(result.opcode))
@@ -99,6 +118,17 @@ class ScooterRepositoryImpl(
             is ParsedInboundResult.CorruptFrame -> {
                 DiagnosticLogger.w("ScooterRepo", "Corrupted frame: ${result.reason}")
             }
+        }
+    }
+
+    fun updateActiveSetting(category: SettingCategory, option: SettingOption) {
+        val current = _scooterState.value
+        _scooterState.value = when (category) {
+            SettingCategory.STARTUP_MODE -> current.copy(activeStartupMode = option as? StartupMode ?: current.activeStartupMode)
+            SettingCategory.SPEED_REGULATION -> current.copy(activeSpeedGear = option as? SpeedRegulationOption ?: current.activeSpeedGear)
+            SettingCategory.CYCLING_MODE -> current.copy(activeCyclingMode = option as? CyclingMode ?: current.activeCyclingMode)
+            SettingCategory.VIBRATION_SENSITIVITY -> current.copy(activeVibrationSensitivity = option as? VibrationSensitivity ?: current.activeVibrationSensitivity)
+            SettingCategory.SLOPE_PARKING -> current.copy(activeSlopeParking = (option == SlopeParkingOption.OPEN))
         }
     }
 

@@ -61,6 +61,41 @@ class BleManager(
     private val writeQueue = ConcurrentLinkedQueue<ByteArray>()
     private var isWriting = false
 
+    private var autoReconnectEnabled = false
+    private var lastTargetAddress: String? = null
+    private var lastTargetName: String? = null
+    private var reconnectJob: Job? = null
+
+    fun enableAutoReconnect(address: String, displayName: String?) {
+        autoReconnectEnabled = true
+        lastTargetAddress = address
+        lastTargetName = displayName
+    }
+
+    fun disableAutoReconnect() {
+        autoReconnectEnabled = false
+        reconnectJob?.cancel()
+        reconnectJob = null
+    }
+
+    private fun checkAutoReconnect() {
+        if (!autoReconnectEnabled || lastTargetAddress == null) return
+        val adapter = bluetoothAdapter
+        if (adapter == null || !adapter.isEnabled) return
+
+        DiagnosticLogger.i("BleManager", "Auto-reconnect active: scheduling reconnect to $lastTargetAddress in 1.8s...")
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            delay(1800)
+            if (_connectionStatus.value == ConnectionStatus.DISCONNECTED && autoReconnectEnabled) {
+                val address = lastTargetAddress ?: return@launch
+                val name = lastTargetName
+                DiagnosticLogger.i("BleManager", "Attempting auto-reconnect to $address...")
+                connectByAddress(address, name)
+            }
+        }
+    }
+
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, intent: Intent?) {
             if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
@@ -142,16 +177,20 @@ class BleManager(
                 DiagnosticLogger.w("BleManager", "GATT Error: status $status. Disconnecting...")
                 releaseGatt()
                 _connectionStatus.value = ConnectionStatus.DISCONNECTED
+                checkAutoReconnect()
                 return
             }
 
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     _connectionStatus.value = ConnectionStatus.DISCOVERING_SERVICES
-                    DiagnosticLogger.i("BleManager", "Connected to GATT server. Discovering services...")
+                    DiagnosticLogger.i("BleManager", "Connected to GATT server. Optimizing connection priority & discovering services...")
                     try {
-                        gatt?.requestMtu(BleConstants.TARGET_MTU)
-                        gatt?.discoverServices()
+                        gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                        scope.launch {
+                            delay(150)
+                            gatt?.discoverServices()
+                        }
                     } catch (e: Exception) {
                         DiagnosticLogger.e("BleManager", "Error discovering services: ${e.message}")
                     }
@@ -160,6 +199,7 @@ class BleManager(
                     DiagnosticLogger.i("BleManager", "Disconnected from GATT server.")
                     releaseGatt()
                     _connectionStatus.value = ConnectionStatus.DISCONNECTED
+                    checkAutoReconnect()
                 }
             }
         }
@@ -400,6 +440,8 @@ class BleManager(
             stopScan()
             releaseGatt()
 
+            enableAutoReconnect(address, displayName)
+
             _connectionStatus.value = ConnectionStatus.CONNECTING
             DiagnosticLogger.i("BleManager", "Connecting to ${displayName ?: "Scooter"} [$address]...")
 
@@ -420,6 +462,7 @@ class BleManager(
     fun disconnect() {
         try {
             DiagnosticLogger.i("BleManager", "User requested disconnect.")
+            disableAutoReconnect()
             activeGatt?.disconnect()
         } catch (e: Exception) {
             DiagnosticLogger.w("BleManager", "Error during disconnect: ${e.message}")
@@ -450,7 +493,17 @@ class BleManager(
     }
 
     fun writePacket(packet: ByteArray) {
-        writeQueue.add(packet)
+        if (packet.size > 20) {
+            var offset = 0
+            while (offset < packet.size) {
+                val chunkSize = minOf(20, packet.size - offset)
+                val chunk = packet.copyOfRange(offset, offset + chunkSize)
+                writeQueue.add(chunk)
+                offset += chunkSize
+            }
+        } else {
+            writeQueue.add(packet)
+        }
         if (!isWriting) {
             processNextWrite()
         }
@@ -487,10 +540,10 @@ class BleManager(
             }
 
             // For WRITE_TYPE_NO_RESPONSE, peripheral does not trigger onCharacteristicWrite callback,
-            // so release lock immediately after a short 30ms throttle!
+            // so release lock after a 40ms interval between chunks!
             if (isNoResponse) {
                 scope.launch {
-                    delay(35)
+                    delay(40)
                     isWriting = false
                     processNextWrite()
                 }
