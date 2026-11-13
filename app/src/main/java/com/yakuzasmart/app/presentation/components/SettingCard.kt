@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,10 +37,11 @@ fun SettingCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(YakuzaDarkCharcoal, RoundedCornerShape(16.dp))
-            .border(1.dp, YakuzaCardBorder, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(OlaWhite)
+            .border(1.dp, OlaCardBorder, RoundedCornerShape(20.dp))
             .clickable { onClick() }
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -52,7 +54,7 @@ fun SettingCard(
                         text = title,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = YakuzaTextPrimary
+                        color = OlaTextPrimary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     StatusBadge(stage = stage, language = language)
@@ -66,14 +68,15 @@ fun SettingCard(
                 Text(
                     text = "Current: $optionLabel",
                     fontSize = 12.sp,
-                    color = YakuzaOrangePrimary
+                    fontWeight = FontWeight.SemiBold,
+                    color = OlaGreenDeepDark
                 )
             }
 
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "Open",
-                tint = YakuzaTextMuted,
+                tint = OlaTextMuted,
                 modifier = Modifier.size(20.dp)
             )
         }

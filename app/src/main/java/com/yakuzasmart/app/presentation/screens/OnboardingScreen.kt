@@ -2,6 +2,8 @@ package com.yakuzasmart.app.presentation.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -11,9 +13,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yakuzasmart.app.core.localization.Language
 import com.yakuzasmart.app.core.theme.*
-import com.yakuzasmart.app.presentation.components.YakuzaButton
-import com.yakuzasmart.app.presentation.components.YakuzaTopBar
+import com.yakuzasmart.app.presentation.components.OlaBrandHeader
+import com.yakuzasmart.app.presentation.components.OlaPillButton
+import com.yakuzasmart.app.presentation.components.OlaScooterHeroGraphic
 
+/**
+ * Screen 1 from user reference:
+ * Minimalist White EV Onboarding with "Smart rides. Greener tomorrow.",
+ * Hero EV Scooter with floating eco-leaves, and vibrant Lime Green pill button.
+ */
 @Composable
 fun OnboardingScreen(
     language: Language,
@@ -23,82 +31,87 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(YakuzaBlack)
+            .background(OlaBackground)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        YakuzaTopBar(
-            title = "Welcome",
-            language = language,
-            onLanguageToggle = onLanguageToggle
-        )
+        Column {
+            // 1. Top EV Branding Header
+            OlaBrandHeader(
+                language = language,
+                onLanguageToggle = onLanguageToggle
+            )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.padding(top = 32.dp)) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. Bold Clean Headlines
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                 Text(
                     text = if (language == Language.HINDI)
-                        "याकुज़ा स्मार्ट में आपका स्वागत है"
+                        "स्मार्ट यात्रा।\nहरित कल।"
                     else
-                        "Welcome to\nYakuza Smart",
+                        "Smart rides.\nGreener tomorrow.",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Black,
-                    color = YakuzaTextPrimary,
-                    lineHeight = 38.sp
+                    color = OlaTextPrimary,
+                    lineHeight = 38.sp,
+                    letterSpacing = (-0.5).sp
                 )
-                Spacer(modifier = Modifier.height(14.dp))
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Text(
                     text = if (language == Language.HINDI)
-                        "आपके याकुज़ा इलेक्ट्रिक स्कूटर के लिए आधुनिक, सुरक्षित एवं द्विभाषी साथी ऐप।"
+                        "कम लागत। शून्य उत्सर्जन।\nअधिकतम सुविधा।"
                     else
-                        "The modern, secure, and bilingual companion for your Yakuza electric scooter.",
-                    fontSize = 15.sp,
-                    color = YakuzaTextSecondary,
-                    lineHeight = 22.sp
-                )
-
-                Spacer(modifier = Modifier.height(36.dp))
-
-                FeaturePoint(
-                    title = if (language == Language.HINDI) "1. सुरक्षित ब्लूटूथ कनेक्शन" else "1. Reliable BLE Connection",
-                    desc = if (language == Language.HINDI)
-                        "न्यूनतम अनुमतियों के साथ तेज़ और सुरक्षित पेयरिंग।"
-                    else
-                        "Fast and verified connection using least-privilege permissions."
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-                FeaturePoint(
-                    title = if (language == Language.HINDI) "2. सेटिंग्स सत्यापन (Read-Back)" else "2. Verified Setting Transactions",
-                    desc = if (language == Language.HINDI)
-                        "कंट्रोलर से पुष्टि के बाद ही सेटिंग को लागू माना जाता है।"
-                    else
-                        "Changes are only marked successful when confirmed by the controller."
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-                FeaturePoint(
-                    title = if (language == Language.HINDI) "3. पर्सिस्टेंस टेस्ट व डायग्नोस्टिक्स" else "3. Persistence Testing & Diagnostics",
-                    desc = if (language == Language.HINDI)
-                        "जांचें कि क्या आपका कंट्रोलर चाबी बंद होने पर सेटिंग्स याद रखता है।"
-                    else
-                        "Verify whether your scooter controller retains settings after power-cycling."
+                        "Low cost. Zero emissions.\nMaximum convenience.",
+                    fontSize = 14.sp,
+                    color = OlaTextMuted,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
-            YakuzaButton(
-                text = if (language == Language.HINDI) "शुरू करें" else "Get Started",
-                onClick = onGetStarted
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 3. Hero Modern EV Scooter Graphic (with ground shadow & leaves)
+            OlaScooterHeroGraphic(
+                modifier = Modifier.fillMaxWidth()
             )
         }
-    }
-}
 
-@Composable
-private fun FeaturePoint(title: String, desc: String) {
-    Column {
-        Text(text = title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = YakuzaOrangePrimary)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = desc, fontSize = 13.sp, color = YakuzaTextSecondary, lineHeight = 18.sp)
+        // 4. Bottom Action Buttons
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OlaPillButton(
+                text = if (language == Language.HINDI) "स्कूटर से जुड़ें" else "Scan Your Scooter",
+                onClick = onGetStarted,
+                icon = Icons.AutoMirrored.Filled.ArrowForward
+            )
+
+            OlaPillButton(
+                text = if (language == Language.HINDI) "डैशबोर्ड पर जाएँ" else "Go to Dashboard",
+                onClick = onGetStarted,
+                isSecondary = true
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = if (language == Language.HINDI)
+                    "याकुज़ा स्मार्ट मोबिलिटी द्वारा संचालित"
+                else
+                    "Powered by Yakuza Smart Mobility",
+                fontSize = 11.sp,
+                color = OlaTextMuted,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }

@@ -5,12 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yakuzasmart.app.core.localization.AppStrings
@@ -25,31 +27,33 @@ fun SafetyWarningBanner(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(YakuzaOrangeContainer.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-            .border(1.dp, YakuzaOrangePrimary.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-            .padding(14.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(OlaGreenSurface)
+            .border(1.dp, OlaGreenBorder, RoundedCornerShape(16.dp))
+            .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Icon(
-                imageVector = Icons.Default.Warning,
+                imageVector = Icons.Default.Shield,
                 contentDescription = "Safety Alert",
-                tint = YakuzaOrangePrimary,
+                tint = OlaGreenPrimary,
                 modifier = Modifier
                     .size(20.dp)
-                    .padding(top = 2.dp)
+                    .padding(top = 1.dp)
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = if (language == Language.HINDI) "सुरक्षा निर्देश (Safety Notice)" else "Safety & Testing Notice",
-                    color = YakuzaOrangePrimary,
+                    text = if (language == Language.HINDI) "सुरक्षा निर्देश (Safety Notice)" else "Safety & Interlock Notice",
+                    color = OlaGreenDeepDark,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     letterSpacing = 0.5.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = AppStrings.stationarySafetyWarning(language),
-                    color = YakuzaTextPrimary,
+                    color = OlaTextSecondary,
                     fontSize = 11.sp,
                     lineHeight = 16.sp
                 )

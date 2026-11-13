@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,22 +32,25 @@ fun TelemetryCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(YakuzaDarkCharcoal, RoundedCornerShape(20.dp))
-            .border(1.dp, YakuzaCardBorder, RoundedCornerShape(20.dp))
-            .padding(18.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(OlaWhite)
+            .border(1.dp, OlaCardBorder, RoundedCornerShape(24.dp))
+            .padding(20.dp)
     ) {
         Column {
-            // Speed and Battery Row
+            // Speed and Battery Top Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
+                // Speed Section
                 Column {
                     Text(
                         text = AppStrings.speed(language).uppercase(),
-                        color = YakuzaTextMuted,
+                        color = OlaTextMuted,
                         fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
@@ -55,176 +59,167 @@ fun TelemetryCard(
                             text = if (state.isConnected && state.speedKmh != null) {
                                 "%.0f".format(state.speedKmh)
                             } else {
-                                "--"
+                                "0"
                             },
-                            fontSize = 46.sp,
+                            fontSize = 44.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (state.isConnected) YakuzaOrangePrimary else YakuzaTextMuted
+                            color = if (state.isConnected) OlaTextPrimary else OlaTextMuted
                         )
                         Text(
                             text = " km/h",
                             fontSize = 14.sp,
-                            color = YakuzaTextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            color = OlaGreenPrimary,
                             modifier = Modifier.padding(bottom = 8.dp, start = 2.dp)
                         )
                     }
                 }
 
-                // Battery Pill
+                // Battery Section with Green Horizontal Bar
                 Column(horizontalAlignment = Alignment.End) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (state.isCharging) {
                             Icon(
                                 imageVector = Icons.Default.Bolt,
                                 contentDescription = "Charging",
-                                tint = YakuzaStatusConnected,
+                                tint = OlaGreenPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (language == Language.HINDI) "चार्जिंग" else "CHARGING",
-                                color = YakuzaStatusConnected,
+                                color = OlaGreenPrimary,
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Black
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                         }
                         Text(
                             text = AppStrings.battery(language).uppercase(),
-                            color = YakuzaTextMuted,
+                            color = OlaTextMuted,
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (state.batteryPercent != null && state.batteryPercent > 20)
-                                        YakuzaStatusConnected
-                                    else if (state.batteryPercent != null)
-                                        YakuzaStatusWarning
-                                    else
-                                        YakuzaTextMuted
-                                )
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (state.isConnected && state.batteryPercent != null) {
-                                "${state.batteryPercent}%"
-                            } else {
-                                "-- %"
-                            },
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = YakuzaTextPrimary
+                            text = if (state.isConnected) "${state.batteryPercent}%" else "--",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (state.isConnected) OlaTextPrimary else OlaTextMuted
                         )
                     }
-                    if (state.isConnected && state.batteryPercent == null) {
-                        Text(
-                            text = if (language == Language.HINDI) "लाइव डेटा प्रतीक्षा..." else "Awaiting live data...",
-                            fontSize = 10.sp,
-                            color = YakuzaTextMuted
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Horizontal Battery Indicator Pill
+                    Box(
+                        modifier = Modifier
+                            .width(80.dp)
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(OlaSurfaceHover)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(fraction = (state.batteryPercent / 100f).coerceIn(0f, 1f))
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    if (state.batteryPercent > 20) OlaGreenPrimary else OlaStatusDisconnected
+                                )
                         )
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.height(18.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(OlaCardBorderLight)
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Sub-metrics Grid (Range, Voltage, Current, Temp)
+            // 4-Column Secondary Metrics Grid
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                MetricItem(
+                MetricColumn(
                     label = AppStrings.estimatedRange(language),
-                    value = if (state.isConnected && state.estimatedRangeKm != null) "${state.estimatedRangeKm} km" else "--"
+                    value = if (state.isConnected) "${state.estimatedRangeKm} km" else "--"
                 )
-                MetricItem(
-                    label = AppStrings.voltage(language),
+                MetricColumn(
+                    label = AppStrings.totalMileage(language),
+                    value = if (state.isConnected && state.totalMileageKm != null) "%.0f km".format(state.totalMileageKm) else "--"
+                )
+                MetricColumn(
+                    label = AppStrings.batteryVoltage(language),
                     value = if (state.isConnected && state.batteryVoltageVolts != null) "%.1f V".format(state.batteryVoltageVolts) else "--"
                 )
-                MetricItem(
+                MetricColumn(
                     label = AppStrings.motorCurrent(language),
                     value = if (state.isConnected && state.motorCurrentAmps != null) "%.1f A".format(state.motorCurrentAmps) else "--"
                 )
-                MetricItem(
-                    label = AppStrings.controllerTemp(language),
-                    value = if (state.isConnected && state.controllerTempCelsius != null) "${state.controllerTempCelsius}°C" else "--"
-                )
             }
 
-            // Odometer & Trip row
-            if (state.isConnected && (state.totalMileageKm != null || state.tripMileageKm != null)) {
-                Spacer(modifier = Modifier.height(12.dp))
+            // Fault Bitmask Indicators
+            val activeFaults = mutableListOf<String>()
+            if (state.faults.kickstandDown) activeFaults.add(if (language == Language.HINDI) "साइड स्टैंड" else "Side Stand")
+            if (state.faults.brakeEngaged) activeFaults.add(if (language == Language.HINDI) "ब्रेक सक्रिय" else "Brake Engaged")
+            if (state.faults.controllerError) activeFaults.add(if (language == Language.HINDI) "कंट्रोलर खराबी" else "Controller Err")
+            if (state.faults.motorHallError) activeFaults.add(if (language == Language.HINDI) "हॉल सेंसर" else "Hall Sensor")
+            if (state.faults.undervoltage) activeFaults.add(if (language == Language.HINDI) "कम वोल्टेज" else "Low Voltage")
+            if (state.faults.throttleError) activeFaults.add(if (language == Language.HINDI) "एक्सेलरेटर" else "Throttle Err")
+
+            if (activeFaults.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(YakuzaCardBackground, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(OlaStatusWarning.copy(alpha = 0.12f))
+                        .border(1.dp, OlaStatusWarning.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = (if (language == Language.HINDI) "कुल दूरी (ODO): " else "Odo: ") +
-                                (if (state.totalMileageKm != null) "%.0f km".format(state.totalMileageKm) else "--"),
-                        fontSize = 11.sp,
-                        color = YakuzaTextSecondary
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Warning",
+                        tint = OlaStatusWarning,
+                        modifier = Modifier.size(16.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = (if (language == Language.HINDI) "ट्रिप: " else "Trip: ") +
-                                (if (state.tripMileageKm != null) "%.1f km".format(state.tripMileageKm) else "--"),
+                        text = activeFaults.joinToString(" • "),
                         fontSize = 11.sp,
-                        color = YakuzaTextSecondary
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFB45309)
                     )
                 }
-            }
-
-            // Fault Warnings Bar if active
-            if (state.faults.hasFault) {
-                Spacer(modifier = Modifier.height(14.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(YakuzaStatusDisconnected.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
-                        .border(1.dp, YakuzaStatusDisconnected.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        text = if (language == Language.HINDI)
-                            "चेतावनी: वाहन में खराबी (Brake/Motor/Temp Fault Detected)"
-                        else
-                            "WARNING: Vehicle Fault Detected (Check Diagnostics)",
-                        color = YakuzaStatusDisconnected,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            if (state.isSimulated) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (language == Language.HINDI)
-                        "[सिम्युलेटर मोड सक्रिय: डेटा आभासी कंट्रोलर द्वारा जनरेटेड है]"
-                    else
-                        "[SIMULATOR ACTIVE: Data generated by in-memory mock controller]",
-                    color = YakuzaStatusSimulated,
-                    fontSize = 10.sp
-                )
             }
         }
     }
 }
 
 @Composable
-private fun MetricItem(label: String, value: String) {
+private fun MetricColumn(label: String, value: String) {
     Column {
-        Text(text = label, color = YakuzaTextMuted, fontSize = 10.sp)
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = OlaTextMuted,
+            fontWeight = FontWeight.Medium
+        )
         Spacer(modifier = Modifier.height(2.dp))
-        Text(text = value, color = YakuzaTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = value,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            color = OlaTextPrimary
+        )
     }
 }

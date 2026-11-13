@@ -1,25 +1,25 @@
 package com.yakuzasmart.app.core.theme
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val YakuzaDarkColorScheme = darkColorScheme(
-    primary = YakuzaOrangePrimary,
+private val OlaLightColorScheme = lightColorScheme(
+    primary = OlaGreenPrimary,
     onPrimary = Color.White,
-    primaryContainer = YakuzaOrangeContainer,
-    onPrimaryContainer = YakuzaOrangeGlow,
-    secondary = YakuzaOrangeAccent,
+    primaryContainer = OlaGreenContainer,
+    onPrimaryContainer = OlaGreenDeepDark,
+    secondary = OlaGreenAccent,
     onSecondary = Color.White,
-    background = YakuzaBlack,
-    onBackground = YakuzaTextPrimary,
-    surface = YakuzaDarkCharcoal,
-    onSurface = YakuzaTextPrimary,
-    surfaceVariant = YakuzaCardBackground,
-    onSurfaceVariant = YakuzaTextSecondary,
-    outline = YakuzaCardBorder,
-    error = YakuzaStatusDisconnected,
+    background = OlaBackground,
+    onBackground = OlaTextPrimary,
+    surface = OlaWhite,
+    onSurface = OlaTextPrimary,
+    surfaceVariant = OlaSurfaceSubtle,
+    onSurfaceVariant = OlaTextSecondary,
+    outline = OlaCardBorder,
+    error = OlaStatusDisconnected,
     onError = Color.White
 )
 
@@ -28,7 +28,7 @@ fun YakuzaSmartTheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = YakuzaDarkColorScheme,
+        colorScheme = OlaLightColorScheme,
         typography = YakuzaTypography,
         content = content
     )
