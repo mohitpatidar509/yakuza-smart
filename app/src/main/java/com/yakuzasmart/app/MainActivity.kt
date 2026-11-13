@@ -49,11 +49,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            android.util.Log.e("YakuzaSmart", "CRASH DETECTED on thread ${thread.name}: ${throwable.message}", throwable)
-            defaultHandler?.uncaughtException(thread, throwable)
-        }
         setContent {
             YakuzaSmartTheme {
                 YakuzaNavGraph(viewModel = viewModel)

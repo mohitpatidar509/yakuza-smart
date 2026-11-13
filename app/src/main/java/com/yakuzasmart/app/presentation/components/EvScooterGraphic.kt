@@ -150,13 +150,8 @@ fun OlaScooterHeroGraphic(
             val cy = h * 0.55f
 
             // 1. Soft Ground Plane Shadow
-            val shadowRadius = maxOf(20f, w * 0.42f)
             drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0x35, 0x00, 0x00, 0x00), Color(0x10, 0x00, 0x00, 0x00), Color.Transparent),
-                    center = Offset(cx, cy + 62f),
-                    radius = shadowRadius
-                ),
+                color = Color(0x22000000),
                 topLeft = Offset(cx - w * 0.4f, cy + 42f),
                 size = Size(maxOf(10f, w * 0.8f), 36f)
             )
@@ -299,7 +294,7 @@ fun OlaScooterHeroGraphic(
             topLeft = Offset(cx - 115f, cy - 70f),
             size = Size(12f, 7f)
         )
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
             // Safe fallback: avoid canvas crash on edge-case device drivers
         }
     }
@@ -577,7 +572,7 @@ fun OlaRouteMiniMap(
                     radius = 6f,
                     center = destCenter
                 )
-            } catch (e: Exception) {
+            } catch (t: Throwable) {
                 // Safe fallback
             }
         }

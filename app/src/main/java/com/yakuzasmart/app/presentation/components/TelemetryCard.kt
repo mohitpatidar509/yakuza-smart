@@ -124,7 +124,7 @@ fun TelemetryCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(fraction = (batPct / 100f).coerceIn(0f, 1f))
+                                .fillMaxWidth(fraction = (batPct / 100f).coerceIn(0.02f, 1f))
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(

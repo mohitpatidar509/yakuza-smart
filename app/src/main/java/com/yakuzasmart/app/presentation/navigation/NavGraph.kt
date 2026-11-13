@@ -35,8 +35,12 @@ fun YakuzaNavGraph(
         composable(Screen.Splash.route) {
             SplashScreen(
                 onSplashFinished = {
-                    navController.navigate(Screen.Dashboard.route) {
-                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    try {
+                        navController.navigate(Screen.Dashboard.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    } catch (e: Exception) {
+                        // Prevent navigation crash
                     }
                 }
             )

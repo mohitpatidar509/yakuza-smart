@@ -476,7 +476,7 @@ fun DashboardScreen(
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .fillMaxWidth(fraction = (dPct / 100f).coerceIn(0f, 1f))
+                                                    .fillMaxWidth(fraction = (dPct / 100f).coerceIn(0.02f, 1f))
                                                     .fillMaxHeight()
                                                     .clip(RoundedCornerShape(3.dp))
                                                     .background(OlaGreenPrimary)
