@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -80,7 +80,7 @@ fun TelemetryCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (state.isCharging) {
                             Icon(
-                                imageVector = Icons.Default.Bolt,
+                                imageVector = Icons.Default.PlayArrow,
                                 contentDescription = "Charging",
                                 tint = OlaGreenPrimary,
                                 modifier = Modifier.size(16.dp)

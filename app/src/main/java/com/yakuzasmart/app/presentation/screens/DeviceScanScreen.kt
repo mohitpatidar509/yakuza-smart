@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -94,7 +93,7 @@ fun DeviceScanScreen(
                 ) {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.BluetoothDisabled, contentDescription = null, tint = YakuzaStatusWarning)
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = YakuzaStatusWarning)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (language == Language.HINDI) "मोबाइल का ब्लूटूथ बंद है" else "Bluetooth is Turned OFF",

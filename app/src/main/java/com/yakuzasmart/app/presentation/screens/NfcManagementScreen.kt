@@ -5,8 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -91,7 +91,7 @@ fun NfcManagementScreen(
                 ) {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CreditCard, contentDescription = null, tint = YakuzaOrangePrimary)
+                            Icon(Icons.Default.DateRange, contentDescription = null, tint = YakuzaOrangePrimary)
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = if (language == Language.HINDI) "कार्ड पढ़ें (Read / Register Card)" else "Enroll New NFC Card",
@@ -135,7 +135,7 @@ fun NfcManagementScreen(
                 ) {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.DeleteForever, contentDescription = null, tint = YakuzaStatusDisconnected)
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = YakuzaStatusDisconnected)
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = if (language == Language.HINDI) "कार्ड हटाएं (Clear Card)" else "Clear All NFC Keys",

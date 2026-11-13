@@ -13,7 +13,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -94,21 +108,21 @@ fun DashboardScreen(
         ) {
             TabPill(
                 title = if (language == Language.HINDI) "राइड डैशबोर्ड" else "Live Ride",
-                icon = Icons.Default.ElectricScooter,
+                icon = Icons.Default.LocationOn,
                 isSelected = selectedTab == DashboardTab.RIDE,
                 onClick = { selectedTab = DashboardTab.RIDE },
                 modifier = Modifier.weight(1f)
             )
             TabPill(
                 title = if (language == Language.HINDI) "मार्ग व खोज" else "Where To",
-                icon = Icons.Default.NearMe,
+                icon = Icons.Default.Place,
                 isSelected = selectedTab == DashboardTab.EXPLORE,
                 onClick = { selectedTab = DashboardTab.EXPLORE },
                 modifier = Modifier.weight(1f)
             )
             TabPill(
                 title = if (language == Language.HINDI) "सेटिंग्स" else "Settings",
-                icon = Icons.Default.Tune,
+                icon = Icons.Default.Settings,
                 isSelected = selectedTab == DashboardTab.SETTINGS,
                 onClick = { selectedTab = DashboardTab.SETTINGS },
                 modifier = Modifier.weight(1f)
@@ -136,7 +150,7 @@ fun DashboardScreen(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.BluetoothDisabled,
+                                imageVector = Icons.Default.Warning,
                                 contentDescription = "Bluetooth Disabled",
                                 tint = OlaStatusWarning,
                                 modifier = Modifier.size(22.dp)
@@ -581,7 +595,7 @@ fun DashboardScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = if (isIgnitionOn) Icons.Default.PowerSettingsNew else Icons.AutoMirrored.Filled.ArrowForward,
+                                                    imageVector = if (isIgnitionOn) Icons.Default.PlayArrow else Icons.AutoMirrored.Filled.ArrowForward,
                                                     contentDescription = null,
                                                     tint = if (isIgnitionOn) Color(0xFFDC2626) else OlaGreenDark,
                                                     modifier = Modifier.size(18.dp)
@@ -601,7 +615,7 @@ fun DashboardScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (state.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                                            imageVector = if (state.isLocked) Icons.Default.Lock else Icons.Default.CheckCircle,
                                             contentDescription = "Lock",
                                             tint = if (state.isLocked) Color(0xFFB45309) else OlaTextPrimary,
                                             modifier = Modifier.size(24.dp)
@@ -617,21 +631,21 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             QuickActionButton(
-                                icon = Icons.Default.VolumeUp,
+                                icon = Icons.Default.Notifications,
                                 label = if (language == Language.HINDI) "सायरन / हॉर्न" else "Find Horn",
                                 onClick = onFindVehicle,
                                 enabled = state.isConnected,
                                 modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                icon = Icons.Default.AirlineSeatReclineNormal,
+                                icon = Icons.Default.Build,
                                 label = if (language == Language.HINDI) "सीट ट्रंक खोलें" else "Open Trunk",
                                 onClick = onOpenSeat,
                                 enabled = state.isConnected,
                                 modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                icon = Icons.Default.Tune,
+                                icon = Icons.Default.Settings,
                                 label = if (language == Language.HINDI) "कंट्रोलर्स" else "Modes",
                                 onClick = onNavigateToSettings,
                                 enabled = true,
@@ -714,7 +728,7 @@ fun DashboardScreen(
                                         )
                                     }
                                     Icon(
-                                        imageVector = Icons.Default.MyLocation,
+                                        imageVector = Icons.Default.LocationOn,
                                         contentDescription = "GPS",
                                         tint = OlaTextMuted,
                                         modifier = Modifier.size(18.dp)
@@ -777,9 +791,9 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     QuickPlaceChip(icon = Icons.Default.Home, name = "Home", time = "12 min")
-                                    QuickPlaceChip(icon = Icons.Default.Work, name = "Work", time = "18 min")
-                                    QuickPlaceChip(icon = Icons.Default.School, name = "University", time = "15 min")
-                                    QuickPlaceChip(icon = Icons.Default.LocalMall, name = "Mall", time = "20 min")
+                                    QuickPlaceChip(icon = Icons.Default.Build, name = "Work", time = "18 min")
+                                    QuickPlaceChip(icon = Icons.Default.Star, name = "University", time = "15 min")
+                                    QuickPlaceChip(icon = Icons.Default.ShoppingCart, name = "Mall", time = "20 min")
                                 }
 
                                 Spacer(modifier = Modifier.height(20.dp))
@@ -815,14 +829,14 @@ fun DashboardScreen(
                             HubCard(
                                 title = AppStrings.vehicleSettings(language),
                                 subtitle = "Soft/Hard Boot, Speed",
-                                icon = Icons.Default.Tune,
+                                icon = Icons.Default.Settings,
                                 onClick = onNavigateToSettings,
                                 modifier = Modifier.weight(1f)
                             )
                             HubCard(
                                 title = AppStrings.nfcManagement(language),
                                 subtitle = "Card Read & Bind",
-                                icon = Icons.Default.Nfc,
+                                icon = Icons.Default.DateRange,
                                 onClick = onNavigateToNfc,
                                 modifier = Modifier.weight(1f)
                             )
@@ -842,7 +856,7 @@ fun DashboardScreen(
                             HubCard(
                                 title = AppStrings.vehicleInfo(language),
                                 subtitle = "Specs & Battery Model",
-                                icon = Icons.Default.ElectricScooter,
+                                icon = Icons.Default.Info,
                                 onClick = onNavigateToVehicleInfo,
                                 modifier = Modifier.weight(1f)
                             )
@@ -1031,7 +1045,7 @@ private fun HubCard(
                 }
             }
             Icon(
-                imageVector = Icons.Default.ChevronRight,
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = OlaTextMuted,
                 modifier = Modifier.size(20.dp)

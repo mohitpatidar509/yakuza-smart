@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ElectricScooter
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -144,21 +142,24 @@ fun OlaScooterHeroGraphic(
             .fillMaxWidth()
             .height(230.dp)
     ) {
-        val w = size.width
-        val h = size.height
-        val cx = w * 0.5f
-        val cy = h * 0.55f
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        try {
+            val w = size.width
+            val h = size.height
+            val cx = w * 0.5f
+            val cy = h * 0.55f
 
-        // 1. Soft Ground Plane Shadow
-        drawOval(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0x35000000), Color(0x10000000), Color.Transparent),
-                center = Offset(cx, cy + 62f),
-                radius = w * 0.42f
-            ),
-            topLeft = Offset(cx - w * 0.4f, cy + 42f),
-            size = Size(w * 0.8f, 36f)
-        )
+            // 1. Soft Ground Plane Shadow
+            val shadowRadius = maxOf(20f, w * 0.42f)
+            drawOval(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x35, 0x00, 0x00, 0x00), Color(0x10, 0x00, 0x00, 0x00), Color.Transparent),
+                    center = Offset(cx, cy + 62f),
+                    radius = shadowRadius
+                ),
+                topLeft = Offset(cx - w * 0.4f, cy + 42f),
+                size = Size(maxOf(10f, w * 0.8f), 36f)
+            )
 
         // 2. Rear Wheel (Left)
         val rearWheelCenter = Offset(cx - 100f, cy + 40f)
@@ -298,6 +299,9 @@ fun OlaScooterHeroGraphic(
             topLeft = Offset(cx - 115f, cy - 70f),
             size = Size(12f, 7f)
         )
+        } catch (e: Exception) {
+            // Safe fallback: avoid canvas crash on edge-case device drivers
+        }
     }
 }
 
@@ -358,7 +362,7 @@ fun TripProgressBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ElectricScooter,
+                        imageVector = Icons.Default.LocationOn,
                         contentDescription = "Riding",
                         tint = OlaGreenPrimary,
                         modifier = Modifier.size(20.dp)
@@ -454,7 +458,7 @@ fun TripProgressBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ElectricScooter,
+                        imageVector = Icons.Default.LocationOn,
                         contentDescription = "Scooter Marker",
                         tint = OlaWhite,
                         modifier = Modifier.size(13.dp)
@@ -492,84 +496,90 @@ fun OlaRouteMiniMap(
             .background(Color(0xFFF3F5F7))
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
+            if (size.width <= 0f || size.height <= 0f) return@Canvas
+            try {
+                val w = size.width
+                val h = size.height
 
-            // 1. Grid/City Blocks
-            drawRect(
-                color = Color(0xFFE9ECEF),
-                topLeft = Offset(w * 0.15f, h * 0.1f),
-                size = Size(w * 0.3f, h * 0.35f)
-            )
-            drawRect(
-                color = Color(0xFFE9ECEF),
-                topLeft = Offset(w * 0.55f, h * 0.05f),
-                size = Size(w * 0.35f, h * 0.4f)
-            )
-            drawRect(
-                color = Color(0xFFE9ECEF),
-                topLeft = Offset(w * 0.1f, h * 0.6f),
-                size = Size(w * 0.4f, h * 0.35f)
-            )
+                // 1. Grid/City Blocks
+                drawRect(
+                    color = Color(0xFFE9ECEF),
+                    topLeft = Offset(w * 0.15f, h * 0.1f),
+                    size = Size(w * 0.3f, h * 0.35f)
+                )
+                drawRect(
+                    color = Color(0xFFE9ECEF),
+                    topLeft = Offset(w * 0.55f, h * 0.05f),
+                    size = Size(w * 0.35f, h * 0.4f)
+                )
+                drawRect(
+                    color = Color(0xFFE9ECEF),
+                    topLeft = Offset(w * 0.1f, h * 0.6f),
+                    size = Size(w * 0.4f, h * 0.35f)
+                )
 
-            // Green park space
-            drawRoundRect(
-                color = Color(0xFFE2F7D2),
-                topLeft = Offset(w * 0.18f, h * 0.14f),
-                size = Size(w * 0.24f, h * 0.25f),
-                cornerRadius = CornerRadius(12f, 12f)
-            )
+                // Green park space
+                drawRoundRect(
+                    color = Color(0xFFE2F7D2),
+                    topLeft = Offset(w * 0.18f, h * 0.14f),
+                    size = Size(w * 0.24f, h * 0.25f),
+                    cornerRadius = CornerRadius(12f, 12f)
+                )
 
-            // 2. Main Roads
-            drawLine(
-                color = Color.White,
-                start = Offset(0f, h * 0.52f),
-                end = Offset(w, h * 0.52f),
-                strokeWidth = 26f
-            )
-            drawLine(
-                color = Color.White,
-                start = Offset(w * 0.5f, 0f),
-                end = Offset(w * 0.5f, h),
-                strokeWidth = 26f
-            )
+                // 2. Main Roads
+                drawLine(
+                    color = Color.White,
+                    start = Offset(0f, h * 0.52f),
+                    end = Offset(w, h * 0.52f),
+                    strokeWidth = 26f
+                )
+                drawLine(
+                    color = Color.White,
+                    start = Offset(w * 0.5f, 0f),
+                    end = Offset(w * 0.5f, h),
+                    strokeWidth = 26f
+                )
 
-            // 3. Active Black Route Line
-            val routePath = Path().apply {
-                moveTo(w * 0.25f, h * 0.65f)
-                lineTo(w * 0.45f, h * 0.52f)
-                lineTo(w * 0.65f, h * 0.25f)
+                // 3. Active Black Route Line
+                val routePath = Path().apply {
+                    moveTo(w * 0.25f, h * 0.65f)
+                    lineTo(w * 0.45f, h * 0.52f)
+                    lineTo(w * 0.65f, h * 0.25f)
+                }
+                drawPath(
+                    path = routePath,
+                    color = Color(0xFF1E2126),
+                    style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+
+                // 4. GPS Radar Pulse on Starting Point
+                val safeRadar = maxOf(5f, radarPulse)
+                drawCircle(
+                    color = Color(0x30, 0x25, 0x63, 0xEB),
+                    radius = safeRadar,
+                    center = Offset(w * 0.25f, h * 0.65f)
+                )
+                drawCircle(
+                    color = Color(0xFF2563EB),
+                    radius = 7f,
+                    center = Offset(w * 0.25f, h * 0.65f)
+                )
+
+                // 5. Destination Pin (Green)
+                val destCenter = Offset(w * 0.65f, h * 0.25f)
+                drawCircle(
+                    color = OlaGreenPrimary,
+                    radius = 16f,
+                    center = destCenter
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6f,
+                    center = destCenter
+                )
+            } catch (e: Exception) {
+                // Safe fallback
             }
-            drawPath(
-                path = routePath,
-                color = Color(0xFF1E2126),
-                style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
-
-            // 4. GPS Radar Pulse on Starting Point
-            drawCircle(
-                color = Color(0x302563EB),
-                radius = radarPulse,
-                center = Offset(w * 0.25f, h * 0.65f)
-            )
-            drawCircle(
-                color = Color(0xFF2563EB),
-                radius = 7f,
-                center = Offset(w * 0.25f, h * 0.65f)
-            )
-
-            // 5. Destination Pin (Green)
-            val destCenter = Offset(w * 0.65f, h * 0.25f)
-            drawCircle(
-                color = OlaGreenPrimary,
-                radius = 16f,
-                center = destCenter
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 6f,
-                center = destCenter
-            )
         }
 
         // Floating Top Card: "Where are you going? City Center"
@@ -597,7 +607,7 @@ fun OlaRouteMiniMap(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.NearMe,
+                            imageVector = Icons.Default.LocationOn,
                             contentDescription = "Location",
                             tint = OlaGreenPrimary,
                             modifier = Modifier.size(18.dp)

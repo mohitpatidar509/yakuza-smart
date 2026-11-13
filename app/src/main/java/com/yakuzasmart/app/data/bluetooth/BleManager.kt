@@ -117,7 +117,11 @@ class BleManager(
     init {
         try {
             val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-            context.registerReceiver(bluetoothReceiver, filter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(bluetoothReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                context.registerReceiver(bluetoothReceiver, filter)
+            }
         } catch (e: Exception) {
             DiagnosticLogger.w("BleManager", "Failed to register Bluetooth state receiver: ${e.message}")
         }

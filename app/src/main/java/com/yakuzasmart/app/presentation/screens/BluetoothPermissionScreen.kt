@@ -7,8 +7,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,7 +67,7 @@ fun BluetoothPermissionScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Bluetooth,
+                        imageVector = Icons.Default.Share,
                         contentDescription = "Bluetooth",
                         tint = YakuzaOrangePrimary,
                         modifier = Modifier.size(36.dp)
@@ -109,7 +109,7 @@ fun BluetoothPermissionScreen(
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
                         Icon(
-                            imageVector = Icons.Default.Security,
+                            imageVector = Icons.Default.Lock,
                             contentDescription = "Privacy",
                             tint = YakuzaStatusConnected,
                             modifier = Modifier.size(20.dp).padding(top = 2.dp)

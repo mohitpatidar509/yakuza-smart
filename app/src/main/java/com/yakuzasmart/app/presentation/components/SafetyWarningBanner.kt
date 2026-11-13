@@ -5,7 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +34,7 @@ fun SafetyWarningBanner(
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Icon(
-                imageVector = Icons.Default.Shield,
+                imageVector = Icons.Default.Warning,
                 contentDescription = "Safety Alert",
                 tint = OlaGreenPrimary,
                 modifier = Modifier
